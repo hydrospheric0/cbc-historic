@@ -144,7 +144,62 @@ export function parseHistoricalResultsByCountCsv(text) {
 		CountId: null,
 		Lat: null,
 		Lon: null,
+		CompilerFirstName: null,
+		CompilerLastName: null,
+		CompilerName: null,
+		CompilerEmail: null,
 	};
+
+	const norm = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
+	const firstNonEmptyAfter = (r, idx) => {
+		for (let j = idx + 1; j < (r || []).length; j++) {
+			const s = norm(r[j]);
+			if (s) return s;
+		}
+		return null;
+	};
+
+	for (let i = 0; i < Math.min(rows.length, 80); i++) {
+		const r = rows[i] || [];
+		if (!Array.isArray(r) || r.length === 0) continue;
+
+		const headerIndexes = new Map();
+		for (let j = 0; j < r.length; j++) {
+			const key = norm(r[j]).toLowerCase();
+			if (!key) continue;
+			if (key === 'compilerfirstname') headerIndexes.set('first', j);
+			if (key === 'compilerlastname') headerIndexes.set('last', j);
+			if (key === 'compileremail' || key === 'email') headerIndexes.set('email', j);
+			if (key === 'compilername' || key === 'compiler') headerIndexes.set('name', j);
+		}
+		if (headerIndexes.size) {
+			const v = rows[i + 1] || [];
+			if (headerIndexes.has('first')) countInfo.CompilerFirstName = norm(v[headerIndexes.get('first')]) || countInfo.CompilerFirstName;
+			if (headerIndexes.has('last')) countInfo.CompilerLastName = norm(v[headerIndexes.get('last')]) || countInfo.CompilerLastName;
+			if (headerIndexes.has('email')) countInfo.CompilerEmail = norm(v[headerIndexes.get('email')]) || countInfo.CompilerEmail;
+			if (headerIndexes.has('name')) countInfo.CompilerName = norm(v[headerIndexes.get('name')]) || countInfo.CompilerName;
+		}
+
+		for (let j = 0; j < r.length; j++) {
+			const cell = norm(r[j]);
+			if (!cell) continue;
+			const lower = cell.toLowerCase();
+
+			if (lower.includes('compiler email') || (lower.includes('compiler') && lower.includes('email'))) {
+				const inline = cell.split(':').slice(1).join(':').trim();
+				const v = inline || firstNonEmptyAfter(r, j);
+				if (v) countInfo.CompilerEmail = v;
+				continue;
+			}
+
+			if (lower.startsWith('compiler') || lower.startsWith('current compiler')) {
+				const inline = cell.split(':').slice(1).join(':').trim();
+				const v = inline || firstNonEmptyAfter(r, j);
+				if (v) countInfo.CompilerName = v;
+				continue;
+			}
+		}
+	}
 
 	for (let i = 0; i < Math.min(rows.length, 50); i++) {
 		const r = rows[i] || [];

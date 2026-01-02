@@ -1223,6 +1223,11 @@ function renderSummary() {
     ['File', state.filename || '—'],
     ['Count Name', ci.CountName || '—'],
     ['Count Code', ci.CountCode || '—'],
+    [
+      'Current Compiler',
+      cleanText([ci.CompilerFirstName, ci.CompilerLastName].filter(Boolean).join(' ')) || ci.CompilerName || '—',
+    ],
+    ['Compiler email', ci.CompilerEmail || '—'],
     ['Location', loc],
     ['Missing years', missingYearsText],
     ['Species years', r.speciesYears || '—'],
@@ -1355,7 +1360,7 @@ function renderPanel(active) {
     if (state.speciesFilterRare || state.speciesFilterOwls) {
       rows = (rows || []).filter((r) => {
         const spName = stripBracketedText(r?.Species || '');
-        if (state.speciesFilterOwls && !/\bowl\b/i.test(spName)) return false;
+        if (state.speciesFilterOwls && !/\bowls?\b/i.test(spName)) return false;
         if (state.speciesFilterRare) {
           let total = 0;
           for (const y of years) total += parseCount(r?.[String(y)]);
@@ -1919,8 +1924,15 @@ panelEl?.addEventListener('click', (e) => {
   const filterBtn = e.target?.closest?.('[data-action="toggle-species-filter"]');
   if (filterBtn) {
     const which = filterBtn.getAttribute('data-filter');
-    if (which === 'rare') state.speciesFilterRare = !state.speciesFilterRare;
-    else if (which === 'owls') state.speciesFilterOwls = !state.speciesFilterOwls;
+    if (which === 'rare') {
+      const next = !state.speciesFilterRare;
+      state.speciesFilterRare = next;
+      if (next) state.speciesFilterOwls = false;
+    } else if (which === 'owls') {
+      const next = !state.speciesFilterOwls;
+      state.speciesFilterOwls = next;
+      if (next) state.speciesFilterRare = false;
+    }
     renderPanel(activeTab);
     return;
   }
