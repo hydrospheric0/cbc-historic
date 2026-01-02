@@ -10,11 +10,9 @@
     "serve": "vite preview"
   },
   "dependencies": {
-    "fflate": "^0.8.2",
     "leaflet": "^1.9.4",
     "plotly.js-basic-dist-min": "^2.35.2",
-    "sql.js": "^1.10.3",
-    "xlsx": "^0.18.5"
+    "sql.js": "^1.10.3"
   },
   "devDependencies": {
     "vite": "^6.4.1"

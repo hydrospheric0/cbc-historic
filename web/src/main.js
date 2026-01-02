@@ -40,7 +40,6 @@ const CBC_HISTORICAL_RESULTS_URL = 'https://netapp.audubon.org/CBCObservation/Re
 const CBC_MAP_URL = 'https://gis.audubon.org/christmasbirdcount/';
 const CBC_126_CIRCLES_QUERY_URL =
   'https://services1.arcgis.com/lDFzr3JyGEn5Eymu/arcgis/rest/services/CBC_126/FeatureServer/0/query';
-const MAX_XLS_BYTES = 2 * 1024 * 1024;
 const MAX_CSV_BYTES = 10 * 1024 * 1024;
 const CURRENT_MAX_COUNT_INDEX = 125;
 
@@ -102,10 +101,10 @@ app.innerHTML = `
           <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
         </div>
 
-        <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Drop CSV/XLS/XLSX here">
+        <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Drop CSV here">
           <div class="dropzone-title">Drop CSV</div>
           <div class="dropzone-sub">…or click to choose a file</div>
-          <input id="fileInput" class="file-input" type="file" accept=".csv,text/csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+          <input id="fileInput" class="file-input" type="file" accept=".csv,text/csv" />
         </div>
 
         <div class="section-title">Ingested counts</div>
@@ -201,7 +200,7 @@ app.innerHTML = `
 
           <p style="margin-top: 12px; font-weight: 800;">How to use</p>
           <p>
-            Drag and drop or select upload button to add a csv (preferred) or xls file from the Audubon CBC portal. Once ingested the information will be visible and downloadable in a generic text format.
+            Drag and drop or select upload button to add a CSV file from the Audubon CBC portal. Once ingested the information will be visible and downloadable in a generic text format.
           </p>
           <p style="margin-top: 12px; font-weight: 700;">If you find this tool useful, please consider supporting its development:</p>
           <div class="sponsorBlock">
@@ -548,54 +547,6 @@ document.addEventListener('keydown', (e) => {
   if (infoModalEl.classList.contains('hidden')) return;
   closeInfoModal();
 });
-
-let xlsWorkerPromise = null;
-function getXlsWorker() {
-  if (!xlsWorkerPromise) {
-    xlsWorkerPromise = Promise.resolve(new Worker(new URL('./xls_worker.js', import.meta.url), { type: 'module' }));
-  }
-  return xlsWorkerPromise;
-}
-
-async function parseXlsInWorker(file) {
-  if (!file) throw new Error('No file provided.');
-  if (typeof file.size === 'number' && file.size > MAX_XLS_BYTES) {
-    throw new Error('Error: .xls files must be 2MB or smaller.');
-  }
-
-  const buf = await file.arrayBuffer();
-  if (buf.byteLength > MAX_XLS_BYTES) {
-    throw new Error('Error: .xls files must be 2MB or smaller.');
-  }
-
-  const worker = await getXlsWorker();
-  return new Promise((resolve, reject) => {
-    const onMessage = (e) => {
-      const data = e?.data;
-      if (data && data.ok) resolve(data.grid);
-      else reject(new Error(data?.error || 'Failed to parse .xls file.'));
-    };
-
-    const onError = (ev) => {
-      // Vite/module worker load errors typically surface here.
-      const msg =
-        ev && typeof ev === 'object' && 'message' in ev && ev.message
-          ? String(ev.message)
-          : 'Failed to parse .xls file.';
-      const where =
-        ev && typeof ev === 'object' && 'filename' in ev && ev.filename
-          ? ` (${String(ev.filename)}${
-              'lineno' in ev && ev.lineno ? `:${String(ev.lineno)}` : ''
-            }${'colno' in ev && ev.colno ? `:${String(ev.colno)}` : ''})`
-          : '';
-      reject(new Error(`${msg}${where}`));
-    };
-
-    worker.addEventListener('message', onMessage, { once: true });
-    worker.addEventListener('error', onError, { once: true });
-    worker.postMessage({ arrayBuffer: buf, preferredSheetName: 'HistoricalResultsByCount' }, [buf]);
-  });
-}
 
 const IDB_NAME = 'cbc_extract_data_web';
 const IDB_STORE = 'kv';
@@ -1075,94 +1026,6 @@ function normalizeUpdateUrl(url) {
   }
 }
 
-function extractCountInfo(grid) {
-  const findCell = (label) => {
-    const target = label.trim();
-    for (let r = 0; r < grid.length; r++) {
-      const row = grid[r] || [];
-      for (let c = 0; c < row.length; c++) {
-        if (cleanText(row[c]) === target) return { r, c };
-      }
-    }
-    return null;
-  };
-
-  const nextNonEmptyInRow = (row, startC) => {
-    for (let c = startC; c < row.length; c++) {
-      const t = cleanText(row[c]);
-      if (t) return t;
-    }
-    return null;
-  };
-
-  const findCellAny = (labels) => {
-    for (const label of labels) {
-      const hit = findCell(label);
-      if (hit) return hit;
-    }
-    return null;
-  };
-
-  const info = {
-    CountName: null,
-    CountCode: null,
-    CountId: null,
-    Lat: null,
-    Lon: null,
-  };
-
-  const cn = findCell('Count Name:');
-  if (cn) {
-    const row = grid[cn.r] || [];
-    info.CountName = nextNonEmptyInRow(row, cn.c + 1);
-    for (let c = cn.c + 1; c < row.length; c++) {
-      if (cleanText(row[c]) === 'Count Code:') {
-        info.CountCode = nextNonEmptyInRow(row, c + 1);
-        break;
-      }
-    }
-  }
-
-  const ll = findCell('Latitude/Longitude:');
-  if (ll) {
-    const row = grid[ll.r] || [];
-    const s = nextNonEmptyInRow(row, ll.c + 1);
-    if (s && s.includes('/')) {
-      const [latS, lonS] = s.split('/', 2);
-      const lat = parseFloat(latS);
-      const lon = parseFloat(lonS);
-      info.Lat = Number.isFinite(lat) ? lat : null;
-      info.Lon = Number.isFinite(lon) ? lon : null;
-    }
-  }
-
-  // Best-effort CountId/cid extraction (not always present in the export).
-  const cidCell = findCellAny(['Count ID:', 'Count Id:', 'CountID:', 'Count Circle ID:', 'Count Circle Id:']);
-  if (cidCell) {
-    const row = grid[cidCell.r] || [];
-    const v = nextNonEmptyInRow(row, cidCell.c + 1);
-    const n = parseInt(cleanText(v), 10);
-    info.CountId = Number.isFinite(n) ? n : null;
-  } else {
-    // Fallback: scan for a literal cid=12345 inside any cell.
-    for (let r = 0; r < grid.length; r++) {
-      const row = grid[r] || [];
-      for (let c = 0; c < row.length; c++) {
-        const t = cleanText(row[c]);
-        const m = t.match(/\bcid\s*=\s*(\d+)\b/i);
-        if (m) {
-          const n = parseInt(m[1], 10);
-          info.CountId = Number.isFinite(n) ? n : null;
-          r = grid.length;
-          break;
-        }
-      }
-    }
-  }
-
-  return info;
-}
-
 function parseCount(v) {
   if (v === undefined || v === null) return 0;
   if (typeof v === 'number') return Number.isFinite(v) ? Math.round(v) : 0;
@@ -1174,55 +1037,6 @@ function parseCount(v) {
   return 0;
 }
 
-function parseTempF(v) {
-  const s = cleanText(v);
-  if (!s) return null;
-  const m = s.match(/^\s*(-?\d+(?:\.\d+)?)\s*(Celsius|Fahrenheit)\s*$/i);
-  if (!m) return null;
-  const val = parseFloat(m[1]);
-  const unit = m[2].toLowerCase();
-  if (unit.startsWith('f')) return val;
-  return val * 9.0 / 5.0 + 32.0;
-}
-
-function formatMmDdYyyy(y, m, d) {
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
-  const mm = String(Math.max(1, Math.min(12, Math.trunc(m)))).padStart(2, '0');
-  const dd = String(Math.max(1, Math.min(31, Math.trunc(d)))).padStart(2, '0');
-  const yy = String(Math.trunc(y)).padStart(4, '0');
-  return `${mm}/${dd}/${yy}`;
-}
-
-function parseCountDateCell(v) {
-  if (v === undefined || v === null) return null;
-  if (v instanceof Date && Number.isFinite(v.getTime())) {
-    return formatMmDdYyyy(v.getFullYear(), v.getMonth() + 1, v.getDate());
-  }
-
-  if (typeof v === 'number' && Number.isFinite(v)) {
-    // Excel serial date (when sheet_to_json is used with raw: true)
-    // Convert without depending on XLSX runtime (keeps XLSX lazy-loadable).
-    const days = Math.floor(v);
-    if (!Number.isFinite(days)) return null;
-    // Excel's 1900-date-system includes a fake 1900-02-29 at serial 60.
-    const adj = days > 59 ? days - 1 : days;
-    const utcMs = Date.UTC(1899, 11, 31) + adj * 86400000;
-    const d = new Date(utcMs);
-    if (!Number.isFinite(d.getTime())) return null;
-    return formatMmDdYyyy(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
-  }
-
-  const s = cleanText(v);
-  if (!s) return null;
-  const m = s.match(/^\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*$/);
-  if (!m) return s;
-  const mm = parseInt(m[1], 10);
-  const dd = parseInt(m[2], 10);
-  const yyRaw = parseInt(m[3], 10);
-  const yy = m[3].length === 2 ? 2000 + yyRaw : yyRaw;
-  return formatMmDdYyyy(yy, mm, dd);
-}
-
 function yearFromCountDateString(countDate) {
   const s = cleanText(countDate);
   if (!s) return null;
@@ -1230,195 +1044,6 @@ function yearFromCountDateString(countDate) {
   if (!m) return null;
   const y = parseInt(m[1], 10);
   return Number.isFinite(y) ? y : null;
-}
-
-function findHeader(grid) {
-  for (let r = 0; r < grid.length; r++) {
-    const row = grid[r] || [];
-    for (let c = 0; c < row.length; c++) {
-      if (cleanText(row[c]) === 'Species') return { headerRow: r, speciesCol: c };
-    }
-  }
-  throw new Error("Could not find a header cell exactly equal to 'Species'");
-}
-
-function findRowWithCell(grid, exact) {
-  const target = exact.trim();
-  for (let r = 0; r < grid.length; r++) {
-    const row = grid[r] || [];
-    for (let c = 0; c < row.length; c++) {
-      if (cleanText(row[c]) === target) return r;
-    }
-  }
-  throw new Error(`Could not find a row containing cell ${JSON.stringify(exact)}`);
-}
-
-function yearColumns(headerRow, speciesCol = null) {
-  const cols = [];
-  const startCol = typeof speciesCol === 'number' && Number.isFinite(speciesCol) ? speciesCol + 1 : 0;
-
-  for (let c = startCol; c < headerRow.length; c++) {
-    const raw = headerRow[c];
-    if (typeof raw === 'number' && Number.isFinite(raw) && Number.isInteger(raw) && raw >= 1900 && raw <= 2100) {
-      cols.push({ col: c, year: raw });
-      continue;
-    }
-
-    const cell = normalizeCell(raw);
-    // Anchor at start to avoid matching years inside things like dates.
-    const m = cell.match(/^\s*(19\d{2}|20\d{2})(?=\D|$)/);
-    if (m) cols.push({ col: c, year: parseInt(m[1], 10) });
-  }
-  if (cols.length === 0) throw new Error('Could not find any year columns in the header row');
-
-  // De-dup by year, keeping the *last* occurrence (some exports can contain duplicate year columns).
-  const lastByYear = new Map();
-  for (const r of cols) lastByYear.set(r.year, r);
-
-  const out = [];
-  for (const r of cols) {
-    const chosen = lastByYear.get(r.year);
-    if (!chosen) continue;
-    if (chosen.col !== r.col) continue;
-    out.push(r);
-  }
-  return out;
-}
-
-function extractYearHeaderMetadata(headerRow) {
-  const rows = [];
-  for (const cellRaw of headerRow) {
-    const cell = normalizeCell(cellRaw);
-    const m = cell.match(/^\s*(19\d{2}|20\d{2})\s*\[(\d+)\]/);
-    if (!m) continue;
-    const year = parseInt(m[1], 10);
-    const countIndex = parseInt(m[2], 10);
-    const dm = cell.match(/Count Date:\s*([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/);
-    rows.push({ CountIndex: countIndex, Year: year, CountDate: dm ? dm[1] : null });
-  }
-  const seen = new Set();
-  const out = [];
-  for (const r of rows) {
-    if (seen.has(r.CountIndex)) continue;
-    seen.add(r.CountIndex);
-    out.push(r);
-  }
-  return out;
-}
-
-function extractCounts(grid, stopSpecies = 'House Sparrow') {
-  const { headerRow, speciesCol } = findHeader(grid);
-  const years = yearColumns(grid[headerRow] || [], speciesCol);
-
-  const out = [];
-  for (let r = headerRow + 1; r < grid.length; r++) {
-    const row = grid[r] || [];
-    const raw = row[speciesCol];
-    if (raw === undefined || raw === null || cleanText(raw) === '') continue;
-
-    const common = cleanText(raw).split('\n')[0].trim();
-    if (!common) continue;
-
-    const rec = { Species: common };
-    for (const { col, year } of years) {
-      // Blank/missing per-species cells for an existing year mean 0.
-      rec[String(year)] = parseCount(row[col]);
-    }
-    out.push(rec);
-
-    if (common === stopSpecies) break;
-  }
-
-  return { table: out, years: years.map((y) => y.year) };
-}
-
-function extractParticipantsEffort(grid) {
-  const headerRow = findRowWithCell(grid, 'Count Date');
-  const header = (grid[headerRow] || []).map((v) => cleanText(v));
-
-  const idx = (label) => {
-    const i = header.indexOf(label);
-    if (i < 0) throw new Error(`Missing expected column label ${label}`);
-    return i;
-  };
-
-  const idxYear = idx('Year');
-  const idxCountDate = idx('Count Date');
-  const idxParticipants = idx('Num. Participants');
-  const idxHours = idx('Num. Hours');
-  const idxSpeciesReported = idx('Num. Species Reported');
-
-  const rows = [];
-  for (let r = headerRow + 1; r < grid.length; r++) {
-    const row = grid[r] || [];
-    const yearIndex = row[idxYear];
-    if (yearIndex === undefined || yearIndex === null || cleanText(yearIndex) === '') break;
-
-    const countIndex = parseInt(cleanText(yearIndex), 10);
-    const countDate = parseCountDateCell(row[idxCountDate]);
-    const yearFromDate = countDate ? yearFromCountDateString(countDate) : null;
-    const yearFallback = parseInt(cleanText(yearIndex), 10);
-    const year = (typeof yearFromDate === 'number' && Number.isFinite(yearFromDate))
-      ? yearFromDate
-      : (Number.isFinite(yearFallback) && yearFallback >= 1900 && yearFallback <= 2100)
-        ? yearFallback
-        : null;
-
-    rows.push({
-      CountIndex: Number.isFinite(countIndex) ? countIndex : null,
-      CountDate: countDate || null,
-      Year: Number.isFinite(year) ? year : null,
-      NumParticipants: cleanText(row[idxParticipants]) ? parseInt(cleanText(row[idxParticipants]), 10) : null,
-      NumHours: cleanText(row[idxHours]) ? parseFloat(cleanText(row[idxHours])) : null,
-      NumSpeciesReported: cleanText(row[idxSpeciesReported]) ? parseInt(cleanText(row[idxSpeciesReported]), 10) : null,
-    });
-  }
-
-  return rows.filter((r) => r.CountIndex !== null);
-}
-
-function extractWeather(grid) {
-  const headerRow = findRowWithCell(grid, 'Low Temp.');
-  const header = (grid[headerRow] || []).map((v) => cleanText(v));
-
-  const maybeIdx = (label) => {
-    const i = header.indexOf(label);
-    return i >= 0 ? i : null;
-  };
-
-  const idxYear = maybeIdx('Year');
-  if (idxYear === null) throw new Error("Weather header row is missing 'Year' column");
-
-  const idxLow = maybeIdx('Low Temp.');
-  const idxHigh = maybeIdx('High Temp.');
-  const idxAMClouds = maybeIdx('AM Clouds');
-  const idxPMClouds = maybeIdx('PM Clouds');
-  const idxAMRain = maybeIdx('AM Rain');
-  const idxPMRain = maybeIdx('PM Rain');
-  const idxAMSnow = maybeIdx('AM Snow');
-  const idxPMSnow = maybeIdx('PM Snow');
-
-  const rows = [];
-  for (let r = headerRow + 1; r < grid.length; r++) {
-    const row = grid[r] || [];
-    const yearIndex = row[idxYear];
-    if (yearIndex === undefined || yearIndex === null || cleanText(yearIndex) === '') break;
-
-    const countIndex = parseInt(cleanText(yearIndex), 10);
-    rows.push({
-      CountIndex: Number.isFinite(countIndex) ? countIndex : null,
-      LowTempF: idxLow === null ? null : parseTempF(row[idxLow]),
-      HighTempF: idxHigh === null ? null : parseTempF(row[idxHigh]),
-      AMClouds: idxAMClouds === null ? '' : cleanText(row[idxAMClouds]),
-      PMClouds: idxPMClouds === null ? '' : cleanText(row[idxPMClouds]),
-      AMRain: idxAMRain === null ? '' : cleanText(row[idxAMRain]),
-      PMRain: idxPMRain === null ? '' : cleanText(row[idxPMRain]),
-      AMSnow: idxAMSnow === null ? '' : cleanText(row[idxAMSnow]),
-      PMSnow: idxPMSnow === null ? '' : cleanText(row[idxPMSnow]),
-    });
-  }
-
-  return rows.filter((r) => r.CountIndex !== null);
 }
 
 function joinWeatherWithYearInfo(weatherRows, participantsEffortRows, metaRows) {
@@ -1437,7 +1062,7 @@ function joinWeatherWithYearInfo(weatherRows, participantsEffortRows, metaRows) 
 function renderSummary() {
   if (!summaryEl) return;
   if (!state.species) {
-    summaryEl.innerHTML = '<div class="empty">No workbook loaded.</div>';
+    summaryEl.innerHTML = '<div class="empty">No CSV loaded.</div>';
     updateMapFromState();
     return;
   }
@@ -1861,7 +1486,7 @@ async function renderPlot(active) {
     const fullTitle = `${withCbcSuffix(countDisplayName())} - ${normalizeRangeForTitle(
       state.ranges?.speciesYears || yearRangeStr(years)
     )} - ${stripBracketedText(state.selectedSpecies)}`;
-    await plotLollipop({ x, y, title: fullTitle, yLabel: 'Count', markerColors });
+    await plotLollipop({ x, y, title: fullTitle, markerColors });
     return;
   }
 
@@ -1946,7 +1571,7 @@ async function renderPlot(active) {
     const x = rows.map((r) => r.Year);
     const y = rows.map((r) => (typeof r.NumHours === 'number' ? r.NumHours : null));
     const fullTitle = `${countDisplayName()} - Number of Hours - ${normalizeRangeForTitle(state.ranges?.effortYears || yearRangeStr(x))}`;
-    await plotLollipop({ x, y, title: fullTitle, yLabel: 'Hours' });
+    await plotLollipop({ x, y, title: fullTitle });
     return;
   }
 
@@ -1962,7 +1587,7 @@ async function renderPlot(active) {
     const x = rows.map((r) => r.Year);
     const y = rows.map((r) => (typeof r.NumParticipants === 'number' ? r.NumParticipants : null));
     const fullTitle = `${countDisplayName()} - Number of Participants - ${normalizeRangeForTitle(state.ranges?.participationYears || yearRangeStr(x))}`;
-    await plotLollipop({ x, y, title: fullTitle, yLabel: 'Participants' });
+    await plotLollipop({ x, y, title: fullTitle });
     return;
   }
 
@@ -2008,44 +1633,25 @@ async function parseUploadedFile(file) {
   let pe;
   let weatherRaw;
 
-  if (name.endsWith('.csv')) {
-    if (typeof file.size === 'number' && file.size > MAX_CSV_BYTES) {
-      throw new Error('Error: .csv files must be 10MB or smaller.');
-    }
-    const text = await file.text();
-    if (text.length > MAX_CSV_BYTES) {
-      throw new Error('Error: .csv files must be 10MB or smaller.');
-    }
-    const { parseHistoricalResultsByCountCsv } = await import('./csv_historical_results.js');
-    const parsed = parseHistoricalResultsByCountCsv(text);
-    countInfo = parsed.countInfo;
-    years = parsed.years;
-    meta = parsed.meta;
-    speciesTable = parsed.speciesTable;
-    pe = parsed.participantsEffort;
-    weatherRaw = parsed.weatherRaw;
-  } else {
-    /** @type {any[][]} */
-    let grid;
-    if (name.endsWith('.xls') && !name.endsWith('.xlsx')) {
-      // Legacy BIFF8 .xls: parse in a Worker (isolation) with strict 2MB cap.
-      grid = await parseXlsInWorker(file);
-    } else {
-      const buf = await file.arrayBuffer();
-      const { parseXlsxFirstSheetToGrid } = await import('./xlsx_lite.js');
-      grid = parseXlsxFirstSheetToGrid(buf);
-    }
-
-    countInfo = extractCountInfo(grid);
-    const headerInfo = findHeader(grid);
-    meta = extractYearHeaderMetadata(grid[headerInfo.headerRow] || []);
-
-    const counts = extractCounts(grid);
-    speciesTable = counts.table;
-    years = counts.years;
-    pe = extractParticipantsEffort(grid);
-    weatherRaw = extractWeather(grid);
+  if (!name.endsWith('.csv')) {
+    throw new Error('Only .csv files are supported in this version.');
   }
+
+  if (typeof file.size === 'number' && file.size > MAX_CSV_BYTES) {
+    throw new Error('Error: .csv files must be 10MB or smaller.');
+  }
+  const text = await file.text();
+  if (text.length > MAX_CSV_BYTES) {
+    throw new Error('Error: .csv files must be 10MB or smaller.');
+  }
+  const { parseHistoricalResultsByCountCsv } = await import('./csv_historical_results.js');
+  const parsed = parseHistoricalResultsByCountCsv(text);
+  countInfo = parsed.countInfo;
+  years = parsed.years;
+  meta = parsed.meta;
+  speciesTable = parsed.speciesTable;
+  pe = parsed.participantsEffort;
+  weatherRaw = parsed.weatherRaw;
 
   const yearsFull = continuousYears(years);
   const missingYears = missingYearsFromRanges(years, yearsFull);

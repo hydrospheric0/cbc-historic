@@ -15,9 +15,7 @@ npm run dev
 Then open the local URL Vite prints.
 
 Notes:
-- Supports `.xlsx` (lightweight parser) and legacy `.xls` (parsed in a Web Worker).
-- `.xls` uploads are limited to **2MB**.
-- `npm audit` may report a high-severity issue in the `xlsx` dependency used for `.xls` support with “no fix available”; the app mitigates this with worker isolation + strict size limits.
+- CSV-only ingestion.
 
 ## Python script
 
