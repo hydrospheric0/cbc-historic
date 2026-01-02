@@ -48,6 +48,7 @@ const KNOWN_COUNT_IDS = {
   CASM: 57049,
   CACC: 57441,
   CARC: 58818,
+  WAPT: 54929,
 };
 
 function buildDefaultCsvDownloadUrl({ abbrev, cid }) {
@@ -660,7 +661,7 @@ async function buildIndexRowFromSqliteBytes(code, buf) {
 }
 
 async function ensureSeedCountsImported() {
-  const seeds = ['CAPC', 'CARC'];
+  const seeds = ['CAPC', 'CARC', 'WAPT'];
   let idx;
   try {
     idx = await loadCountsIndex();

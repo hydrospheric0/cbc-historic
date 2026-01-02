@@ -286,8 +286,8 @@ body {
 
 .export-button-header {
   justify-self: end;
-  border-color: rgba(255, 255, 255, 0.55);
-  background: transparent;
+  border-color: rgba(0, 0, 0, 0.18);
+  background: var(--header-bg);
   color: #fff;
 }
 
@@ -416,6 +416,11 @@ body {
   line-height: 24px;
   text-align: center;
   padding: 0;
+}
+
+.update-button.delete-button {
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.45);
 }
 
 .update-button:hover {

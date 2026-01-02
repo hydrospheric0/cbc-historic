@@ -14,6 +14,7 @@ const CURRENT_MAX_COUNT_INDEX = 125;
 const SEEDS = [
   { code: 'CAPC', cid: 57023 },
   { code: 'CARC', cid: 58818 },
+  { code: 'WAPT', cid: 54929 },
 ];
 
 function yearRangeStr(years) {
