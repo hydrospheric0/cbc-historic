@@ -249,18 +249,11 @@ function syncSidebarHeights() {
   const tableRect = tablePaneEl.getBoundingClientRect();
   const sidebarRect = sidebarEl.getBoundingClientRect();
 
-  // Target: nav height == (teal header + table container) height.
   let navHeight = Math.round(tableRect.bottom - headerRect.top);
   if (!Number.isFinite(navHeight) || navHeight <= 0) return;
-
-  // Small fudge factor to avoid 1px overflow/scrollbars due to rounding and device pixel ratios.
   navHeight += 2;
-
-  // Clamp so we always leave usable space for the map.
   const GAP_PX = 14;
   const MIN_MAP_PX = 160;
-
-  // Resources card is a separate container and should keep its natural height.
   let resourcesHeight = 0;
   if (resourcesCardEl) {
     resourcesCardEl.style.flex = '0 0 auto';
@@ -289,7 +282,6 @@ function syncSidebarHeights() {
   if (leafletMap) leafletMap.invalidateSize();
 }
 
-// Leaflet default marker icons need explicit URLs under bundlers.
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: leafletMarker2x,
   iconUrl: leafletMarker,
@@ -312,8 +304,6 @@ function requestSidebarSync() {
 function ensureLeafletMap() {
   if (!mapEl) return null;
   if (leafletMap) return leafletMap;
-
-  // Clear placeholder.
   mapEl.innerHTML = '';
 
   leafletMap = L.map(mapEl, {
@@ -326,12 +316,10 @@ function ensureLeafletMap() {
     attribution: '&copy; OpenStreetMap contributors',
   }).addTo(leafletMap);
 
-  // Map sizing depends on sidebar height calculations.
   requestSidebarSync();
   return leafletMap;
 }
 
-// Keep sidebar in sync as table/header resize (e.g., switching counts, expanding columns).
 try {
   const tablePaneEl = document.querySelector('.table-pane');
   if (tablePaneEl && window.ResizeObserver) {
@@ -339,7 +327,6 @@ try {
     ro.observe(tablePaneEl);
   }
 } catch {
-  // Ignore observer issues; we still sync on window resize.
 }
 
 function updateMapFromState() {
@@ -386,7 +373,6 @@ function updateMapFromState() {
     leafletCircle.setRadius(radiusMeters);
   }
 
-  // Fit to circle bounds with a little padding.
   try {
     map.fitBounds(leafletCircle.getBounds(), { padding: [18, 18] });
   } catch {
@@ -395,7 +381,6 @@ function updateMapFromState() {
 }
 
 let circlesIndexPromise = null;
-/** @type {Array<{Abbrev:string, Name:string, Circle_id:number}> | null} */
 let circlesIndex = null;
 let selectedCircle = null;
 
@@ -428,7 +413,6 @@ async function loadCirclesIndex126() {
     offset += feats.length;
     if (feats.length < pageSize) break;
   }
-  // stable sort by name for nicer results
   all.sort((x, y) => x.Name.localeCompare(y.Name));
   return all;
 }
@@ -537,7 +521,6 @@ infoBtnEl?.addEventListener('click', () => {
 infoModalCloseEl?.addEventListener('click', () => closeInfoModal());
 
 infoModalEl?.addEventListener('click', (e) => {
-  // Click outside the card closes.
   if (e.target === infoModalEl) closeInfoModal();
 });
 
@@ -804,7 +787,6 @@ const tabs = {
   participation: document.getElementById('tabParticipation'),
 };
 
-/** @type {{species: any[]|null, weather: any[]|null, effort: any[]|null, participation: any[]|null, meta: any[]|null, sourceUrl: string|null, maxCountIndex: number|null, years: number[]|null, yearsFull: number[]|null, missingYears: number[]|null, filename: string|null, countInfo: any|null, ranges: any|null, selectedSpecies: string|null}} */
 let state = {
   species: null,
   weather: null,
@@ -834,14 +816,12 @@ function applyHeaderTheme() {
 
 function schedulePlotResize() {
   if (!plotEl) return;
-  // Plotly's `responsive: true` doesn't always catch flex/layout-driven size changes.
   requestAnimationFrame(() => {
     const P = plotlyRef;
     if (!P) return;
     try {
       P.Plots.resize(plotEl);
     } catch {
-      // ignore
     }
   });
 }
@@ -862,7 +842,6 @@ function currentPlotSize() {
   const padT = parseFloat(cs.paddingTop || '0') || 0;
   const padB = parseFloat(cs.paddingBottom || '0') || 0;
 
-  // clientWidth/Height include padding; Plotly renders inside the content box.
   const width = plotEl.clientWidth - padL - padR;
   const height = plotEl.clientHeight - padT - padB;
   return {
@@ -961,7 +940,6 @@ function withCbcSuffix(name) {
 }
 
 function inferCountIndexRange({ meta, weather, effort, participation }) {
-  /** @type {number[]} */
   const idxs = [];
 
   const pushIdx = (v) => {
@@ -1008,12 +986,18 @@ function normalizeUpdateUrl(url) {
   if (!url) return null;
   try {
     const u = new URL(String(url));
+    if (u.protocol !== 'https:') return null;
+    const allowedHosts = new Set([
+      new URL(CBC_RESULTS_URL).host,
+      new URL(CBC_HISTORICAL_RESULTS_URL).host,
+    ]);
+    if (!allowedHosts.has(u.host)) return null;
+
     u.searchParams.set('rf', 'CSV');
     u.searchParams.set('so', '0');
     u.searchParams.set('sy', '1');
     u.searchParams.set('ey', String(CURRENT_MAX_COUNT_INDEX));
 
-    // If cid is missing but abbrev is known, inject cid.
     const hasCid = !!u.searchParams.get('cid');
     const abbrev = (u.searchParams.get('abbrev') || '').trim();
     if (!hasCid && abbrev && KNOWN_COUNT_IDS[abbrev]) {
@@ -1098,7 +1082,7 @@ function renderSummary() {
 function renderCountHeader() {
   if (!countHeaderTextEl) return;
   if (!state.species) {
-    countHeaderTextEl.textContent = 'Load a workbook or select existing count data';
+    countHeaderTextEl.textContent = 'Load a CSV or select existing count data';
     requestSidebarSync();
     return;
   }
@@ -1115,8 +1099,6 @@ function renderCountHeader() {
 
 function stripBracketedText(s) {
   const raw = String(s ?? '');
-  // Drop bracketed suffixes like: "American Robin [Turdus migratorius]" -> "American Robin"
-  // Also handles multiple bracket groups defensively.
   return raw.replaceAll(/\s*\[[^\]]*\]\s*/g, ' ').replaceAll(/\s+/g, ' ').trim();
 }
 
@@ -1179,13 +1161,12 @@ function renderPanel(active) {
 
   if (!state.species) {
     panelHeaderEl.innerHTML = '';
-    panelEl.innerHTML = '<div class="empty">Table appears here when workbook is loaded.</div>';
+    panelEl.innerHTML = '<div class="empty">Table appears here when a CSV is loaded.</div>';
     return;
   }
 
   const cfg = getTableConfig(active);
   if (active === 'species') {
-    // Requested: the Species title/range is redundant and the header background stays blank.
     panelHeaderEl.innerHTML = `
       <div></div>
       <button class="export-button" type="button" data-action="export" data-export="${escapeHtml(active)}">Export CSV</button>
@@ -1203,8 +1184,6 @@ function renderPanel(active) {
   if (active === 'species') {
     const years = state.yearsFull || state.years || [];
     const missingYearsSet = new Set((state.missingYears || []).filter((y) => typeof y === 'number' && Number.isFinite(y)));
-    panelEl.innerHTML = renderTable(state.species, ['Species', ...years.map(String)], { clickSpecies: true, ndForMissingYears: true });
-    // Re-render with missing years context (kept separate to avoid changing other callers).
     panelEl.innerHTML = renderTable(state.species, ['Species', ...years.map(String)], {
       clickSpecies: true,
       ndForMissingYears: true,
@@ -1322,7 +1301,6 @@ function clearPlot(msg) {
     try {
       P.purge(plotEl);
     } catch {
-      // ignore
     }
   }
   setPlotHeader({ title: 'Plot', enableExport: false });
@@ -1334,11 +1312,6 @@ async function plotLollipop({ x, y, title, markerColors = null }) {
   plotEl.innerHTML = '';
 
   const Plotly = await getPlotly();
-
-  // Match the standalone species_plot lollipop style:
-  // - vertical stems from 0 to y
-  // - markers at y
-  // - no special last-year highlight
   const n = Math.min(x.length, y.length);
   const xs = [];
   const ys = [];
@@ -1460,7 +1433,7 @@ async function plotLollipop({ x, y, title, markerColors = null }) {
 
 async function renderPlot(active) {
   if (!state.species) {
-    clearPlot('Plot appears here when workbook is loaded.');
+    clearPlot('Plot appears here when a CSV is loaded.');
     return;
   }
 
@@ -1612,7 +1585,6 @@ async function downloadPngFromPlot() {
       a.remove();
     })
     .catch(() => {
-      // ignore
     });
 }
 
@@ -1656,7 +1628,6 @@ async function parseUploadedFile(file) {
   const yearsFull = continuousYears(years);
   const missingYears = missingYearsFromRanges(years, yearsFull);
 
-  // Prefer the meta/header year (matches species year columns); fall back to CountDate-derived year.
   const metaYearByIdx = new Map((meta || []).map((r) => [r.CountIndex, r.Year]));
   pe = (pe || []).map((r) => {
     const metaYear = metaYearByIdx.get(r?.CountIndex);
@@ -1729,14 +1700,11 @@ async function handleFile(file) {
     renderSummary();
     setActiveTab('species');
 
-    // Ensure Leaflet tiles render after layout.
     setTimeout(() => {
       if (leafletMap) leafletMap.invalidateSize();
     }, 0);
 
-    // Persist extracted results for this count locally.
     saveCurrentStateToSqlite().catch(() => {
-      // ignore
     });
   } catch (e) {
     const msg = e?.message || String(e);
@@ -1821,7 +1789,6 @@ ingestedEl?.addEventListener('click', (e) => {
     const code = updateBtn.getAttribute('data-code');
     if (!code) return;
 
-    // Known circles: always use the same CSV URL as the quick links.
     if (KNOWN_COUNT_IDS[code]) {
       const url = buildDefaultCsvDownloadUrl({ abbrev: code, cid: KNOWN_COUNT_IDS[code] });
       if (url) {
@@ -1836,7 +1803,6 @@ ingestedEl?.addEventListener('click', (e) => {
       }
     }
 
-    // Read the stored DB just to get sourceUrl/maxCountIndex (avoid changing the current view).
     idbGet(`${IDB_KEY_DB_PREFIX}${code}`)
       .then(async (buf) => {
         if (!buf) throw new Error('No stored database found for that count.');
@@ -1892,7 +1858,6 @@ countSearchEl?.addEventListener('input', () => {
 });
 
 countSearchEl?.addEventListener('focus', () => {
-  // Warm the index on focus so first keystroke is responsive.
   ensureCirclesIndexLoaded().catch(() => {});
 });
 
@@ -1939,7 +1904,6 @@ dropzoneEl?.addEventListener('dragover', (e) => {
   try {
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
   } catch {
-    // ignore
   }
   setDragState(true);
 });
@@ -1954,25 +1918,18 @@ dropzoneEl?.addEventListener('drop', (e) => {
   handleFile(f);
 });
 
-// Prevent the browser's default behavior of navigating/opening a file on drop.
-// This is what causes the dropped file to appear to "download" instead of being processed.
 const preventBrowserFileDrop = (e) => {
-  // Important: prevent default, but do NOT stop propagation.
-  // We still want the dropzone's handler to run when the drop happens on it.
   e.preventDefault();
   try {
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
   } catch {
-    // ignore
   }
 };
 
-// Capture phase is more reliable: it runs even if the drop happens over Plotly, tables, etc.
 document.addEventListener('dragenter', preventBrowserFileDrop, { capture: true });
 document.addEventListener('dragover', preventBrowserFileDrop, { capture: true });
 document.addEventListener('drop', preventBrowserFileDrop, { capture: true });
 
-// Initial load of previously-ingested counts.
 refreshIngestedCounts();
 requestSidebarSync();
 

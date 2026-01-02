@@ -41,14 +41,10 @@ function parseLatLong(latLongStr) {
 	};
 }
 
-// Minimal RFC4180-ish CSV parser that supports quoted fields and embedded newlines.
-// Returns an array of rows, each row an array of strings.
 export function parseCsvText(text, { maxRows = 250000, maxCols = 200 } = {}) {
 	const s = normalizeNewlines(text);
 
-	/** @type {string[][]} */
 	const rows = [];
-	/** @type {string[]} */
 	let row = [];
 	let field = '';
 	let inQuotes = false;
@@ -150,7 +146,6 @@ export function parseHistoricalResultsByCountCsv(text) {
 		Lon: null,
 	};
 
-	// Circle info section
 	for (let i = 0; i < Math.min(rows.length, 50); i++) {
 		const r = rows[i] || [];
 		if (r[0] === 'CircleName' && r[1] === 'Abbrev') {
@@ -164,17 +159,13 @@ export function parseHistoricalResultsByCountCsv(text) {
 		}
 	}
 
-	/** @type {Array<{CountIndex:number, LowTempF:(number|null), HighTempF:(number|null), AMClouds:string, PMClouds:string, AMRain:string, PMRain:string, AMSnow:string, PMSnow:string}>} */
 	const weatherRaw = [];
 
-	/** @type {Array<{CountIndex:number, CountDate:(string|null), Year:(number|null), NumParticipants:(number|null), NumHours:(number|null), NumSpeciesReported:(number|null)}>} */
 	const participantsEffort = [];
 
-	/** @type {Array<{CountIndex:number, Year:number, CountDate:(string|null)}>} */
 	const meta = [];
 	const metaSeen = new Set();
 
-	// Weather section header: CountYear3,LowTemp,...
 	for (let i = 0; i < rows.length; i++) {
 		const r = rows[i] || [];
 		if (r[0] === 'CountYear3' && (r[1] || '').toLowerCase().includes('lowtemp')) {
@@ -200,7 +191,6 @@ export function parseHistoricalResultsByCountCsv(text) {
 		}
 	}
 
-	// Participants/Effort section: CountYear5,... but columns are CountIndex, CountDate, Participants, TotalHrs, SpeciesReported
 	for (let i = 0; i < rows.length; i++) {
 		const r = rows[i] || [];
 		if (r[0] === 'CountYear5') {
@@ -225,7 +215,6 @@ export function parseHistoricalResultsByCountCsv(text) {
 		}
 	}
 
-	// Species long-form section: COM_NAME,CountYear,how_manyCW,...
 	let speciesSectionStart = -1;
 	for (let i = 0; i < rows.length; i++) {
 		const r = rows[i] || [];
@@ -235,7 +224,6 @@ export function parseHistoricalResultsByCountCsv(text) {
 		}
 	}
 
-	/** @type {Map<string, Map<number, number>>} */
 	const countsBySpecies = new Map();
 
 	if (speciesSectionStart !== -1) {
@@ -259,7 +247,6 @@ export function parseHistoricalResultsByCountCsv(text) {
 				meta.push({ CountIndex, Year, CountDate: CountDate || null });
 			}
 
-			// Merge year-header details into PE if present
 			const existing = participantsEffort.find((r) => r.CountIndex === CountIndex);
 			if (existing) {
 				if (!existing.CountDate && CountDate) existing.CountDate = CountDate;
@@ -280,7 +267,6 @@ export function parseHistoricalResultsByCountCsv(text) {
 	}
 
 	const years = uniqueSortedYearsFromMeta(meta);
-	/** @type {Array<Record<string, any>>} */
 	const speciesTable = [];
 	for (const [species, byYear] of countsBySpecies.entries()) {
 		const rec = { Species: species };
