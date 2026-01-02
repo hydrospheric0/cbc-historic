@@ -890,6 +890,8 @@ async function loadStateFromSqlite(code) {
     ...parsed,
     filename: null,
     selectedSpecies: null,
+    speciesFilterRare: false,
+    speciesFilterOwls: false,
   };
   renderCountHeader();
   renderSummary();
@@ -953,6 +955,8 @@ let state = {
   countInfo: null,
   ranges: null,
   selectedSpecies: null,
+  speciesFilterRare: false,
+  speciesFilterOwls: false,
 };
 
 let activeTab = 'species';
@@ -1346,11 +1350,35 @@ function renderPanel(active) {
   if (active === 'species') {
     const years = state.yearsFull || state.years || [];
     const missingYearsSet = new Set((state.missingYears || []).filter((y) => typeof y === 'number' && Number.isFinite(y)));
-    panelEl.innerHTML = renderTable(state.species, ['Species', ...years.map(String)], {
-      clickSpecies: true,
-      ndForMissingYears: true,
-      missingYearsSet,
-    });
+
+    let rows = state.species;
+    if (state.speciesFilterRare || state.speciesFilterOwls) {
+      rows = (rows || []).filter((r) => {
+        const spName = stripBracketedText(r?.Species || '');
+        if (state.speciesFilterOwls && !/\bowl\b/i.test(spName)) return false;
+        if (state.speciesFilterRare) {
+          let total = 0;
+          for (const y of years) total += parseCount(r?.[String(y)]);
+          if (total > 2) return false;
+        }
+        return true;
+      });
+    }
+
+    const filterBar = `
+      <div class="species-filter-bar" role="group" aria-label="Species filters">
+        <button type="button" class="tab-button${state.speciesFilterRare ? ' active' : ''}" data-action="toggle-species-filter" data-filter="rare">Rare</button>
+        <button type="button" class="tab-button${state.speciesFilterOwls ? ' active' : ''}" data-action="toggle-species-filter" data-filter="owls">Owls</button>
+      </div>
+    `;
+
+    panelEl.innerHTML =
+      filterBar +
+      renderTable(rows, ['Species', ...years.map(String)], {
+        clickSpecies: true,
+        ndForMissingYears: true,
+        missingYearsSet,
+      });
     return;
   }
 
@@ -1856,6 +1884,8 @@ async function handleFile(file) {
       ...parsed,
       filename: file.name,
       selectedSpecies: null,
+      speciesFilterRare: false,
+      speciesFilterOwls: false,
     };
 
     renderCountHeader();
@@ -1886,6 +1916,15 @@ exportCsvBtnEl?.addEventListener('click', () => {
 });
 
 panelEl?.addEventListener('click', (e) => {
+  const filterBtn = e.target?.closest?.('[data-action="toggle-species-filter"]');
+  if (filterBtn) {
+    const which = filterBtn.getAttribute('data-filter');
+    if (which === 'rare') state.speciesFilterRare = !state.speciesFilterRare;
+    else if (which === 'owls') state.speciesFilterOwls = !state.speciesFilterOwls;
+    renderPanel(activeTab);
+    return;
+  }
+
   const cell = e.target?.closest?.('[data-action="plot-species"]');
   if (!cell) return;
   const sp = cell.getAttribute('data-species');
@@ -1928,6 +1967,8 @@ ingestedEl?.addEventListener('click', (e) => {
           countInfo: null,
           ranges: null,
           selectedSpecies: null,
+          speciesFilterRare: false,
+          speciesFilterOwls: false,
         };
         renderCountHeader();
         renderSummary();
