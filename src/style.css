@@ -1063,6 +1063,22 @@ body {
   filter: brightness(0.95);
 }
 
+.export-button.export-button-header {
+  background: var(--header-bg);
+  color: #fff;
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+.export-button.export-button-header:hover {
+  background: var(--header-bg);
+  filter: brightness(0.97);
+}
+
+.export-button.export-button-header:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .table-wrap {
   padding: 0;
   flex: 1;
