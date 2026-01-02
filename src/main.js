@@ -86,7 +86,6 @@ app.innerHTML = `
 
     <aside class="sidebar">
     <div class="sidebar-card nav-card card">
-      <div class="cardHeader">Navigation</div>
       <div class="cardBody">
         <div class="count-search">
           <input
