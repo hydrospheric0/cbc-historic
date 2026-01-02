@@ -101,6 +101,8 @@ app.innerHTML = `
           <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
         </div>
 
+        <div class="dropzone-instructions">Due to data limitations, download your count circle data above and Drop the CSV below</div>
+
         <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Drop CSV here">
           <div class="dropzone-title">Drop CSV</div>
           <div class="dropzone-sub">…or click to choose a file</div>
