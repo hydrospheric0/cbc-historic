@@ -11,9 +11,8 @@ __pycache__/
 venv/
 
 # Web
-web/node_modules/
-web/dist/
-web/node_modules/.vite/
+node_modules/
+dist/
 
 # Node / tooling caches
 **/.vite/

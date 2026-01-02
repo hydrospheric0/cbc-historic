@@ -1,34 +1,19 @@
-# cbc_extract_data
+# CBC Historic (CSV-only)
 
-This repo contains two tools for working with Audubon Christmas Bird Count (CBC) **Historical Results By Count** spreadsheet exports.
+Small Vite web UI for parsing the Audubon CBC **Historical Results By Count** CSV export and showing the extracted tables.
 
-## Web app (recommended)
-
-The web UI lives in [web/](web/).
+## Run locally
 
 ```bash
-cd web
 npm install
 npm run dev
 ```
 
-Then open the local URL Vite prints.
+## GitHub Pages
 
-Notes:
-- CSV-only ingestion.
+This repo is configured to deploy to GitHub Pages via Actions.
 
-## Python script
+- Workflow: `.github/workflows/deploy-pages.yml`
+- Vite `base` is set for project pages at `https://hydrospheric0.github.io/cbc-historic/`
 
-[extract_historical_results_by_count.py](extract_historical_results_by_count.py) extracts cleaned CSV tables from a CBC export `.xls`.
-
-Dependencies:
-- `pandas`
-- `xlrd`
-
-Example:
-
-```bash
-python extract_historical_results_by_count.py --input "HistoricalResultsByCount [CAPC-1972-2025].xls"
-```
-
-Outputs default under `source/cbc_website/...` (see script args); you can override with `--counts-output`, `--participants-output`, etc.
+In GitHub repo settings, ensure **Pages** is set to **GitHub Actions** as the source.
