@@ -1,9 +1,9 @@
 import './style.css';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import leafletMarker2x from 'leaflet/dist/images/marker-icon-2x.png';
-import leafletMarker from 'leaflet/dist/images/marker-icon.png';
-import leafletMarkerShadow from 'leaflet/dist/images/marker-shadow.png';
+import leafletMarker2x from 'leaflet/dist/images/marker-icon-2x.png?url';
+import leafletMarker from 'leaflet/dist/images/marker-icon.png?url';
+import leafletMarkerShadow from 'leaflet/dist/images/marker-shadow.png?url';
 
 let plotlyPromise = null;
 let plotlyRef = null;
@@ -107,14 +107,14 @@ app.innerHTML = `
           <input id="fileInput" class="file-input" type="file" accept=".csv,text/csv" />
         </div>
 
-        <div class="section-title">Ingested counts</div>
+        <div class="section-title">Imported data</div>
         <div id="ingested" class="summary">
           <div class="empty">None yet.</div>
         </div>
 
         <div class="section-title">Summary</div>
         <div id="summary" class="summary">
-          <div class="empty">No workbook loaded.</div>
+          <div class="empty">No CSV loaded.</div>
         </div>
       </div>
     </div>
@@ -141,13 +141,14 @@ app.innerHTML = `
     <main class="main">
       <div id="countHeader" class="count-header card">
         <div class="count-header-bar">
-          <div id="countHeaderText" class="count-header-text">Load a workbook or select existing count data</div>
+          <div id="countHeaderText" class="count-header-text">Load a CSV or select existing count data</div>
           <div class="tabs" role="tablist" aria-label="Tables">
             <button id="tabSpecies" class="tab-button active" type="button">Species</button>
             <button id="tabWeather" class="tab-button" type="button">Weather</button>
             <button id="tabEffort" class="tab-button" type="button">Effort</button>
             <button id="tabParticipation" class="tab-button" type="button">Participation</button>
           </div>
+          <button id="exportCsvBtn" class="export-button export-button-header" type="button" disabled>Export CSV</button>
         </div>
       </div>
 
@@ -155,14 +156,14 @@ app.innerHTML = `
         <div class="table-pane card">
           <div id="panelHeader" class="panel-header"></div>
           <div id="panel" class="panel">
-            <div class="empty">Table appears here when workbook is loaded.</div>
+            <div class="empty">Table appears here when a CSV is loaded.</div>
           </div>
         </div>
 
         <div class="plot-pane card">
           <div id="plotHeader" class="panel-header"></div>
           <div id="plot" class="plot">
-            <div class="empty">Plot appears here when workbook is loaded.</div>
+            <div class="empty">Plot appears here when a CSV is loaded.</div>
           </div>
         </div>
       </div>
@@ -225,6 +226,7 @@ const summaryEl = document.getElementById('summary');
 const mapEl = document.getElementById('map');
 const countHeaderEl = document.getElementById('countHeader');
 const countHeaderTextEl = document.getElementById('countHeaderText');
+const exportCsvBtnEl = document.getElementById('exportCsvBtn');
 const panelHeaderEl = document.getElementById('panelHeader');
 const panelEl = document.getElementById('panel');
 const plotHeaderEl = document.getElementById('plotHeader');
@@ -431,42 +433,66 @@ function ensureCirclesIndexLoaded() {
 function renderSelectedCircle() {
   if (!countSearchSelectedEl) return;
   if (!selectedCircle) {
-    countSearchSelectedEl.innerHTML = '';
+    countSearchSelectedEl.replaceChildren();
     countSearchSelectedEl.classList.add('hidden');
     return;
   }
   countSearchSelectedEl.classList.remove('hidden');
   const url = buildDefaultCsvDownloadUrl({ abbrev: selectedCircle.Abbrev, cid: selectedCircle.Circle_id });
-  const safeUrl = url ? escapeHtml(url) : '';
-  countSearchSelectedEl.innerHTML = `
-    <div class="count-selected-row"><span class="k">Name</span><span>${escapeHtml(selectedCircle.Name)}</span></div>
-    <div class="count-selected-row"><span class="k">Code</span><span>${escapeHtml(selectedCircle.Abbrev)}</span></div>
-    <div class="count-selected-row"><span class="k">ID</span><span>${escapeHtml(String(selectedCircle.Circle_id))}</span></div>
-    <div class="count-selected-actions">
-      <a class="button-link" href="${safeUrl}" target="_blank" rel="noopener noreferrer">Download CSV</a>
-    </div>
-  `;
+  countSearchSelectedEl.replaceChildren();
+
+  const addRow = (k, v) => {
+    const row = document.createElement('div');
+    row.className = 'count-selected-row';
+    const kk = document.createElement('span');
+    kk.className = 'k';
+    kk.textContent = k;
+    const vv = document.createElement('span');
+    vv.textContent = String(v ?? '');
+    row.appendChild(kk);
+    row.appendChild(vv);
+    countSearchSelectedEl.appendChild(row);
+  };
+
+  addRow('Name', selectedCircle.Name);
+  addRow('Code', selectedCircle.Abbrev);
+  addRow('ID', String(selectedCircle.Circle_id));
+
+  const actions = document.createElement('div');
+  actions.className = 'count-selected-actions';
+  const a = document.createElement('a');
+  a.className = 'button-link';
+  a.textContent = 'Download CSV';
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  if (url) a.href = url;
+  else a.href = '#';
+  actions.appendChild(a);
+  countSearchSelectedEl.appendChild(actions);
 }
 
 function renderCircleSearchResults(query, results) {
   if (!countSearchResultsEl) return;
   if (!query) {
-    countSearchResultsEl.innerHTML = '';
+    countSearchResultsEl.replaceChildren();
     return;
   }
   if (!results || results.length === 0) {
-    countSearchResultsEl.innerHTML = '<div class="count-search-empty">No matches.</div>';
+    countSearchResultsEl.replaceChildren(
+      Object.assign(document.createElement('div'), { className: 'count-search-empty', textContent: 'No matches.' })
+    );
     return;
   }
-  countSearchResultsEl.innerHTML = results
-    .slice(0, 8)
-    .map((r) => {
-      const label = `${r.Name} (${r.Abbrev})`;
-      return `<button class="count-search-item" type="button" data-action="pick-circle" data-code="${escapeHtml(
-        r.Abbrev
-      )}">${escapeHtml(label)}</button>`;
-    })
-    .join('');
+  countSearchResultsEl.replaceChildren();
+  for (const r of results.slice(0, 8)) {
+    const btn = document.createElement('button');
+    btn.className = 'count-search-item';
+    btn.type = 'button';
+    btn.dataset.action = 'pick-circle';
+    btn.dataset.code = r.Abbrev;
+    btn.textContent = `${r.Name} (${r.Abbrev})`;
+    countSearchResultsEl.appendChild(btn);
+  }
 }
 
 let _searchTimer = null;
@@ -489,7 +515,9 @@ function scheduleCircleSearch() {
     } catch (err) {
       const msg = err?.message || String(err);
       if (countSearchResultsEl) {
-        countSearchResultsEl.innerHTML = `<div class="count-search-empty">${escapeHtml(msg)}</div>`;
+        countSearchResultsEl.replaceChildren(
+          Object.assign(document.createElement('div'), { className: 'count-search-empty', textContent: msg })
+        );
       }
     }
   }, 150);
@@ -601,50 +629,171 @@ async function saveCountsIndex(index) {
   await idbSet(IDB_KEY_INDEX, index);
 }
 
+async function buildIndexRowFromSqliteBytes(code, buf) {
+  const SQL = await getSql();
+  const db = new SQL.Database(new Uint8Array(buf));
+  const readJson = (key) => {
+    const res = db.exec('SELECT value FROM kv WHERE key = ' + JSON.stringify(key));
+    const v = res?.[0]?.values?.[0]?.[0];
+    if (!v) return null;
+    try {
+      return JSON.parse(v);
+    } catch {
+      return null;
+    }
+  };
+
+  const ci = readJson('countInfo') || {};
+  const ranges = readJson('ranges') || {};
+  const years = readJson('years') || [];
+  const maxCountIndex = readJson('maxCountIndex');
+  db.close();
+
+  const name = ci.CountName || ci.CountCode || code;
+  const range = normalizeRangeForTitle(ranges?.speciesYears || yearRangeStr(years));
+  return {
+    code,
+    name,
+    range,
+    maxCountIndex: maxCountIndex ?? null,
+    updatedAt: Date.now(),
+  };
+}
+
+async function ensureSeedCountsImported() {
+  const seeds = ['CAPC', 'CARC'];
+  let idx;
+  try {
+    idx = await loadCountsIndex();
+  } catch {
+    idx = [];
+  }
+  const haveIndex = new Set((idx || []).map((r) => r?.code).filter(Boolean));
+  const next = (idx || []).slice();
+
+  for (const code of seeds) {
+    const key = `${IDB_KEY_DB_PREFIX}${code}`;
+    let buf = null;
+    try {
+      buf = await idbGet(key);
+    } catch {
+    }
+
+    if (!buf) {
+      const seedUrl = new URL(`seed/${code}.sqlite`, window.location.href).toString();
+      const r = await fetch(seedUrl, { credentials: 'omit' });
+      if (r.ok) {
+        const ab = await r.arrayBuffer();
+        await idbSet(key, ab);
+        buf = ab;
+      }
+    }
+
+    if (buf && !haveIndex.has(code)) {
+      try {
+        const row = await buildIndexRowFromSqliteBytes(code, buf);
+        next.push(row);
+        haveIndex.add(code);
+      } catch {
+      }
+    }
+  }
+
+  if (next.length !== (idx || []).length) {
+    await saveCountsIndex(next);
+  }
+}
+
 function renderIngestedCountsList(index) {
   if (!ingestedEl) return;
   const rows = (index || []).slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (rows.length === 0) {
-    ingestedEl.innerHTML = '<div class="empty">None yet.</div>';
+    ingestedEl.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty', textContent: 'None yet.' }));
     return;
   }
-  const body = rows
-    .map((r) => {
-      const name = r.name || 'Count';
-      const code = r.code || '';
-      const range = r.range || '—';
-      const updatedText = formatShortDate(r.updatedAt);
-      const updateCell = `
-        <div class="update-cell">
-          ${updatedText ? `<span class="update-meta">Updated ${escapeHtml(updatedText)}</span>` : ''}
-          <button class="update-button" type="button" data-action="update-count" data-code="${escapeHtml(
-            code
-          )}" aria-label="Update" title="Update">↻</button>
-          <button class="update-button delete-button" type="button" data-action="delete-count" data-code="${escapeHtml(
-            code
-          )}" aria-label="Delete" title="Delete">×</button>
-        </div>
-      `;
-      return `
-        <tr>
-          <td><a class="link" href="#" data-action="load-count" data-code="${escapeHtml(code)}">${escapeHtml(
-        name
-      )}</a></td>
-          <td>${escapeHtml(code)}</td>
-          <td>${escapeHtml(range)}</td>
-          <td class="col-update">${updateCell}</td>
-        </tr>
-      `;
-    })
-    .join('');
-  ingestedEl.innerHTML = `
-    <div class="table-wrap">
-      <table class="table">
-        <thead><tr><th>Count</th><th>Code</th><th>Years</th><th class="col-update">Update</th></tr></thead>
-        <tbody>${body}</tbody>
-      </table>
-    </div>
-  `;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'table-wrap';
+  const table = document.createElement('table');
+  table.className = 'table';
+
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  for (const h of ['Count', 'Code', 'Years', 'Update']) {
+    const th = document.createElement('th');
+    th.textContent = h;
+    if (h === 'Update') th.className = 'col-update';
+    headRow.appendChild(th);
+  }
+  thead.appendChild(headRow);
+
+  const tbody = document.createElement('tbody');
+  for (const r of rows) {
+    const name = r?.name || 'Count';
+    const code = r?.code || '';
+    const range = r?.range || '—';
+    const updatedText = formatShortDate(r?.updatedAt);
+
+    const tr = document.createElement('tr');
+
+    const tdName = document.createElement('td');
+    const a = document.createElement('a');
+    a.className = 'link';
+    a.href = '#';
+    a.dataset.action = 'load-count';
+    a.dataset.code = code;
+    a.textContent = name;
+    tdName.appendChild(a);
+
+    const tdCode = document.createElement('td');
+    tdCode.textContent = code;
+
+    const tdRange = document.createElement('td');
+    tdRange.textContent = range;
+
+    const tdUpdate = document.createElement('td');
+    tdUpdate.className = 'col-update';
+    const cell = document.createElement('div');
+    cell.className = 'update-cell';
+    if (updatedText) {
+      const meta = document.createElement('span');
+      meta.className = 'update-meta';
+      meta.textContent = `Updated ${updatedText}`;
+      cell.appendChild(meta);
+    }
+    const btnUpdate = document.createElement('button');
+    btnUpdate.className = 'update-button';
+    btnUpdate.type = 'button';
+    btnUpdate.dataset.action = 'update-count';
+    btnUpdate.dataset.code = code;
+    btnUpdate.setAttribute('aria-label', 'Update');
+    btnUpdate.title = 'Update';
+    btnUpdate.textContent = '↻';
+
+    const btnDel = document.createElement('button');
+    btnDel.className = 'update-button delete-button';
+    btnDel.type = 'button';
+    btnDel.dataset.action = 'delete-count';
+    btnDel.dataset.code = code;
+    btnDel.setAttribute('aria-label', 'Delete');
+    btnDel.title = 'Delete';
+    btnDel.textContent = 'X';
+
+    cell.appendChild(btnUpdate);
+    cell.appendChild(btnDel);
+    tdUpdate.appendChild(cell);
+
+    tr.appendChild(tdName);
+    tr.appendChild(tdCode);
+    tr.appendChild(tdRange);
+    tr.appendChild(tdUpdate);
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  ingestedEl.replaceChildren(wrap);
 
   requestSidebarSync();
 }
@@ -1046,7 +1195,7 @@ function joinWeatherWithYearInfo(weatherRows, participantsEffortRows, metaRows) 
 function renderSummary() {
   if (!summaryEl) return;
   if (!state.species) {
-    summaryEl.innerHTML = '<div class="empty">No CSV loaded.</div>';
+    summaryEl.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty', textContent: 'No CSV loaded.' }));
     updateMapFromState();
     return;
   }
@@ -1064,17 +1213,30 @@ function renderSummary() {
     .sort((a, b) => a - b);
   const missingYearsText = missingYears.length ? missingYears.join(', ') : 'None';
 
-  summaryEl.innerHTML = `
-    <div class="summary-row"><div class="summary-k">File</div><div>${escapeHtml(state.filename || '—')}</div></div>
-    <div class="summary-row"><div class="summary-k">Count Name</div><div>${escapeHtml(ci.CountName || '—')}</div></div>
-    <div class="summary-row"><div class="summary-k">Count Code</div><div>${escapeHtml(ci.CountCode || '—')}</div></div>
-    <div class="summary-row"><div class="summary-k">Location</div><div>${escapeHtml(loc)}</div></div>
-    <div class="summary-row"><div class="summary-k">Missing years</div><div>${escapeHtml(missingYearsText)}</div></div>
-    <div class="summary-row"><div class="summary-k">Species years</div><div>${escapeHtml(r.speciesYears || '—')}</div></div>
-    <div class="summary-row"><div class="summary-k">Weather years</div><div>${escapeHtml(r.weatherYears || '—')}</div></div>
-    <div class="summary-row"><div class="summary-k">Effort years</div><div>${escapeHtml(r.effortYears || '—')}</div></div>
-    <div class="summary-row"><div class="summary-k">Participation years</div><div>${escapeHtml(r.participationYears || '—')}</div></div>
-  `;
+  const rows = [
+    ['File', state.filename || '—'],
+    ['Count Name', ci.CountName || '—'],
+    ['Count Code', ci.CountCode || '—'],
+    ['Location', loc],
+    ['Missing years', missingYearsText],
+    ['Species years', r.speciesYears || '—'],
+    ['Weather years', r.weatherYears || '—'],
+    ['Effort years', r.effortYears || '—'],
+    ['Participation years', r.participationYears || '—'],
+  ];
+  summaryEl.replaceChildren();
+  for (const [k, v] of rows) {
+    const row = document.createElement('div');
+    row.className = 'summary-row';
+    const kk = document.createElement('div');
+    kk.className = 'summary-k';
+    kk.textContent = k;
+    const vv = document.createElement('div');
+    vv.textContent = String(v ?? '—');
+    row.appendChild(kk);
+    row.appendChild(vv);
+    summaryEl.appendChild(row);
+  }
 
   updateMapFromState();
 }
@@ -1083,6 +1245,7 @@ function renderCountHeader() {
   if (!countHeaderTextEl) return;
   if (!state.species) {
     countHeaderTextEl.textContent = 'Load a CSV or select existing count data';
+    if (exportCsvBtnEl) exportCsvBtnEl.setAttribute('disabled', '');
     requestSidebarSync();
     return;
   }
@@ -1094,6 +1257,7 @@ function renderCountHeader() {
   const parts = [cleanText(name), code, cleanText(range)].filter((p) => p);
   const line = parts.join(' - ');
   countHeaderTextEl.textContent = line;
+  if (exportCsvBtnEl) exportCsvBtnEl.removeAttribute('disabled');
   requestSidebarSync();
 }
 
@@ -1167,17 +1331,13 @@ function renderPanel(active) {
 
   const cfg = getTableConfig(active);
   if (active === 'species') {
-    panelHeaderEl.innerHTML = `
-      <div></div>
-      <button class="export-button" type="button" data-action="export" data-export="${escapeHtml(active)}">Export CSV</button>
-    `;
+    panelHeaderEl.innerHTML = '';
   } else {
     panelHeaderEl.innerHTML = `
       <div class="panel-title">
         ${escapeHtml(cfg.title)}
         <span class="panel-sub">${escapeHtml(cfg.range)}</span>
       </div>
-      <button class="export-button" type="button" data-action="export" data-export="${escapeHtml(active)}">Export CSV</button>
     `;
   }
 
@@ -1713,15 +1873,13 @@ async function handleFile(file) {
   }
 }
 
-panelHeaderEl?.addEventListener('click', (e) => {
-  const btn = e.target?.closest?.('[data-action="export"]');
-  if (!btn) return;
-  const which = btn.getAttribute('data-export');
-  const cfg = getTableConfig(which);
+exportCsvBtnEl?.addEventListener('click', () => {
+  if (!state.species) return;
+  const cfg = getTableConfig(activeTab);
   const csv = rowsToCsv(cfg.rows || [], cfg.columns || []);
   const ci = state.countInfo || {};
   const base = sanitizeFilenamePart(ci.CountCode || ci.CountName || 'cbc');
-  const tab = sanitizeFilenamePart(cfg.title || which);
+  const tab = sanitizeFilenamePart(cfg.title || activeTab);
   downloadCsv(`${base}_${tab}.csv`, csv);
 });
 
@@ -1772,8 +1930,8 @@ ingestedEl?.addEventListener('click', (e) => {
         renderCountHeader();
         renderSummary();
         panelHeaderEl.innerHTML = '';
-        panelEl.innerHTML = '<div class="empty">Table appears here when workbook is loaded.</div>';
-        clearPlot('Plot appears here when workbook is loaded.');
+        panelEl.innerHTML = '<div class="empty">Table appears here when a CSV is loaded.</div>';
+        clearPlot('Plot appears here when a CSV is loaded.');
       }
     })().catch((err) => {
       const msg = err?.message || String(err);
@@ -1930,8 +2088,12 @@ document.addEventListener('dragenter', preventBrowserFileDrop, { capture: true }
 document.addEventListener('dragover', preventBrowserFileDrop, { capture: true });
 document.addEventListener('drop', preventBrowserFileDrop, { capture: true });
 
-refreshIngestedCounts();
-requestSidebarSync();
+ensureSeedCountsImported()
+  .catch(() => {})
+  .finally(() => {
+    refreshIngestedCounts();
+    requestSidebarSync();
+  });
 
 window.addEventListener('resize', () => {
   schedulePlotResize();

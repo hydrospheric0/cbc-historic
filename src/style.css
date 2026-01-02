@@ -260,11 +260,10 @@ body {
   padding: 10px 12px;
   background: var(--selection-header-bg);
   color: #fff;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
 .count-header-text {
@@ -282,8 +281,23 @@ body {
 .tabs {
   display: flex;
   gap: 8px;
-  flex: 0 0 auto;
-  justify-content: flex-end;
+  justify-content: center;
+}
+
+.export-button-header {
+  justify-self: end;
+  border-color: rgba(255, 255, 255, 0.55);
+  background: transparent;
+  color: #fff;
+}
+
+.export-button-header:hover {
+  filter: brightness(0.97);
+}
+
+.export-button-header:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .tab-button {
