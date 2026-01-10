@@ -1,4 +1,6 @@
-# [CBC Historic](https://hydrospheric0.github.io/cbc-historic/)
+# CBC Historic
+
+[![languages](https://img.shields.io/github/languages/count/hydrospheric0/cbc-historic?label=languages)](https://github.com/hydrospheric0/cbc-historic)
 
 ## About the Christmas Bird Count
 The Christmas Bird Count is the nation’s longest-running community science bird project. It occurs December 14 to January 5 every season in over 3000 count circles. More information can be found on the [Audubon website](https://www.audubon.org/community-science/christmas-bird-count).
