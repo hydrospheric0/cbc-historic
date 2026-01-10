@@ -29,3 +29,6 @@ dist/
 
 # Misc
 *.log
+
+# Local helper scripts (not tracked)
+pushit.sh
