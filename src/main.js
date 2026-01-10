@@ -135,6 +135,7 @@ app.innerHTML = `
         <div class="resources-links">
           <a class="link" href="${CBC_RESULTS_URL}" target="_blank" rel="noopener noreferrer">Download Audubon CBC Count Results</a>
           <a class="link" href="${CBC_MAP_URL}" target="_blank" rel="noopener noreferrer">Audubon CBC map</a>
+          <a class="link" href="https://netapp.audubon.org/aap/application/cbc?_gl=1*14vfzzw*_gcl_au*NDI1NjA4MDIuMTc2NjI5MTI2MA..*_ga*MTAwNTY5OTc2Ny4xNzY2MjkxMjU5*_ga_X2XNL2MWTT*czE3NjY1OTQ0MjEkbzIkZzAkdDE3NjY1OTQ0MjEkajYwJGwwJGgw" target="_blank" rel="noopener noreferrer">Audubon Application Portal</a>
         </div>
       </div>
     </div>
