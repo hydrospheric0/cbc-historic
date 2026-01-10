@@ -292,6 +292,16 @@ L.Icon.Default.mergeOptions({
   shadowUrl: leafletMarkerShadow,
 });
 
+// Vite + Leaflet: ensure the default icon URLs above are actually used.
+// Leaflet's internal _getIconUrl can fall back to a relative imagePath,
+// which breaks in bundlers and on GitHub Pages.
+try {
+  // eslint-disable-next-line no-underscore-dangle
+  delete L.Icon.Default.prototype._getIconUrl;
+} catch {
+  // ignore
+}
+
 let leafletMap = null;
 let leafletMapMarker = null;
 let leafletCircle = null;

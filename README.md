@@ -2,6 +2,8 @@
 
 Small Vite web UI for parsing the Audubon CBC **Historical Results By Count** CSV export and showing the extracted tables.
 
+- Hosted app: https://hydrospheric0.github.io/cbc-historic/
+
 ## Run locally
 
 ```bash
@@ -17,3 +19,6 @@ This repo is configured to deploy to GitHub Pages via Actions.
 - Vite `base` is set for project pages at `https://hydrospheric0.github.io/cbc-historic/`
 
 In GitHub repo settings, ensure **Pages** is set to **GitHub Actions** as the source.
+
+## Support
+If you find this tool useful, please consider supporting its development: https://github.com/sponsors/hydrospheric0
