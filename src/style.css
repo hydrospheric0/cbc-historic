@@ -2,17 +2,30 @@ html,
 body {
   height: 100%;
   margin: 0;
-  background: #f3f4f6;
+  background: #ffffff;
   overflow: hidden;
 }
 
 :root {
-  --header-bg: #111827;
-  --accent-teal: #009688;
+  /* Metolius Research theme */
+  --header-bg: #0c1b50;
+  /* Keep legacy var name to minimize churn */
+  --accent-teal: #dc337d;
+  --accent-green: #748938;
+  --accent-slate: #4b6576;
   --selection-header-bg: var(--accent-teal);
 
-  --table-header-bg: #e5e7eb;
-  --table-header-fg: #111827;
+  --table-header-bg: #f7f7f7;
+  --table-header-fg: #0c1b50;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Nunito Sans', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
 
 #app {
@@ -28,9 +41,9 @@ body {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  color: #111827;
-  background: #f3f4f6;
+  font-family: 'Poppins', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  color: #454545;
+  background: #ffffff;
 }
 
 .topbar {
@@ -47,6 +60,7 @@ body {
   line-height: 1.15;
   background: var(--header-bg);
   color: #f9fafb;
+  font-family: 'Nunito Sans', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
 
 .topbarTitle {
@@ -69,7 +83,7 @@ body {
 }
 
 .infoButton:hover {
-  background: rgba(0, 150, 136, 0.9);
+  background: rgba(220, 51, 125, 0.9);
 }
 
 .content-row {
@@ -629,7 +643,7 @@ body {
 .modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 150, 136, 0.7);
+  background: rgba(12, 27, 80, 0.7);
   z-index: 5000;
   display: flex;
   align-items: flex-start;
