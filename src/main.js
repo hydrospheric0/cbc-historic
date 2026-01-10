@@ -38,6 +38,7 @@ const app = document.querySelector('#app');
 const CBC_RESULTS_URL = 'https://netapp.audubon.org/CBCObservation/Historical/ResultsByCount.aspx';
 const CBC_HISTORICAL_RESULTS_URL = 'https://netapp.audubon.org/CBCObservation/Reports/HistoricalResultsByCount.aspx';
 const CBC_MAP_URL = 'https://gis.audubon.org/christmasbirdcount/';
+const CBC_PORTAL_URL = 'https://netapp.audubon.org/aap/application/cbc';
 const CBC_126_CIRCLES_QUERY_URL =
   'https://services1.arcgis.com/lDFzr3JyGEn5Eymu/arcgis/rest/services/CBC_126/FeatureServer/0/query';
 const MAX_CSV_BYTES = 10 * 1024 * 1024;
@@ -135,7 +136,7 @@ app.innerHTML = `
         <div class="resources-links">
           <a class="link" href="${CBC_RESULTS_URL}" target="_blank" rel="noopener noreferrer">Download Audubon CBC Count Results</a>
           <a class="link" href="${CBC_MAP_URL}" target="_blank" rel="noopener noreferrer">Audubon CBC map</a>
-          <a class="link" href="https://netapp.audubon.org/aap/application/cbc?_gl=1*14vfzzw*_gcl_au*NDI1NjA4MDIuMTc2NjI5MTI2MA..*_ga*MTAwNTY5OTc2Ny4xNzY2MjkxMjU5*_ga_X2XNL2MWTT*czE3NjY1OTQ0MjEkbzIkZzAkdDE3NjY1OTQ0MjEkajYwJGwwJGgw" target="_blank" rel="noopener noreferrer">Audubon Application Portal</a>
+          <a class="link" href="${CBC_PORTAL_URL}" target="_blank" rel="noopener noreferrer">Audubon Application Portal</a>
         </div>
       </div>
     </div>
@@ -292,15 +293,9 @@ L.Icon.Default.mergeOptions({
   iconUrl: leafletMarker,
   shadowUrl: leafletMarkerShadow,
 });
-
-// Vite + Leaflet: ensure the default icon URLs above are actually used.
-// Leaflet's internal _getIconUrl can fall back to a relative imagePath,
-// which breaks in bundlers and on GitHub Pages.
 try {
-  // eslint-disable-next-line no-underscore-dangle
   delete L.Icon.Default.prototype._getIconUrl;
 } catch {
-  // ignore
 }
 
 let leafletMap = null;
@@ -1288,6 +1283,12 @@ function stripBracketedText(s) {
   return raw.replaceAll(/\s*\[[^\]]*\]\s*/g, ' ').replaceAll(/\s+/g, ' ').trim();
 }
 
+function isSpRecord(speciesName) {
+  const s = stripBracketedText(speciesName).trim();
+  if (!s) return false;
+  return /(?:^|[\s,\/])sp\.?\s*$/i.test(s);
+}
+
 function renderTable(rows, columns, opts = {}) {
   if (!rows || rows.length === 0) {
     return '<div class="empty">No rows.</div>';
@@ -1368,6 +1369,7 @@ function renderPanel(active) {
     const missingYearsSet = new Set((state.missingYears || []).filter((y) => typeof y === 'number' && Number.isFinite(y)));
 
     let rows = state.species;
+    rows = (rows || []).filter((r) => !isSpRecord(r?.Species || ''));
     if (state.speciesFilterRare || state.speciesFilterOwls) {
       rows = (rows || []).filter((r) => {
         const spName = stripBracketedText(r?.Species || '');
@@ -1648,9 +1650,21 @@ async function renderPlot(active) {
       clearPlot('Click a species name to plot.');
       return;
     }
-    const row = (state.species || []).find((r) => r.Species === state.selectedSpecies);
+    if (isSpRecord(state.selectedSpecies)) {
+      clearPlot('This record is hidden (sp.).');
+      return;
+    }
+
+    const selectedNorm = stripBracketedText(state.selectedSpecies).toLowerCase();
+    const row =
+      (state.species || []).find((r) => r.Species === state.selectedSpecies) ||
+      (state.species || []).find((r) => stripBracketedText(r?.Species || '').toLowerCase() === selectedNorm);
     if (!row) {
       clearPlot('Species not found.');
+      return;
+    }
+    if (isSpRecord(row.Species)) {
+      clearPlot('This record is hidden (sp.).');
       return;
     }
     const years = (state.yearsFull || state.years || []).slice().sort((a, b) => a - b);
@@ -2154,11 +2168,34 @@ document.addEventListener('dragenter', preventBrowserFileDrop, { capture: true }
 document.addEventListener('dragover', preventBrowserFileDrop, { capture: true });
 document.addEventListener('drop', preventBrowserFileDrop, { capture: true });
 
+async function applyDefaultSelections() {
+  if (state?.species) return;
+
+  try {
+    await loadStateFromSqlite('CAPC');
+  } catch {
+    return;
+  }
+
+  const target = 'Wrentit';
+  const row = (state.species || []).find(
+    (r) => stripBracketedText(r?.Species || '').toLowerCase() === target.toLowerCase()
+  );
+  if (!row || isSpRecord(row.Species)) return;
+
+  state.selectedSpecies = row.Species;
+  await renderPlot('species');
+}
+
 ensureSeedCountsImported()
   .catch(() => {})
   .finally(() => {
-    refreshIngestedCounts();
-    requestSidebarSync();
+    (async () => {
+      await refreshIngestedCounts();
+      requestSidebarSync();
+      await applyDefaultSelections();
+      requestSidebarSync();
+    })().catch(() => {});
   });
 
 window.addEventListener('resize', () => {
