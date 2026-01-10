@@ -10,7 +10,7 @@ body {
   /* Metolius Research theme */
   --header-bg: #0c1b50;
   /* Keep legacy var name to minimize churn */
-  --accent-teal: #dc337d;
+  --accent-teal: #009688;
   --accent-green: #748938;
   --accent-slate: #4b6576;
   --selection-header-bg: var(--accent-teal);
@@ -83,7 +83,7 @@ h6 {
 }
 
 .infoButton:hover {
-  background: rgba(220, 51, 125, 0.9);
+  background: rgba(0, 150, 136, 0.9);
 }
 
 .content-row {
