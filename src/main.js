@@ -1661,7 +1661,7 @@ function renderIngestedCountsList(index) {
     btnUp.setAttribute('aria-label', 'Update');
     btnUp.title = CBC_WORKER_BASE_URL ? 'Download and store' : 'CSV proxy is not configured';
     btnUp.textContent = '↻';
-    if (!CBC_WORKER_BASE_URL) btnUp.disabled = true;
+    if (!CBC_WORKER_BASE_URL) btnUp.classList.add('is-disabled');
     cell.appendChild(btnUp);
 
     tdUpdate.appendChild(cell);
@@ -3122,11 +3122,17 @@ ingestedEl?.addEventListener('click', async (e) => {
     const code = updateBtn.getAttribute('data-code');
     if (!code) return;
 
+    const updateCell = updateBtn.closest?.('.update-cell');
+    const metaEl = updateCell?.querySelector?.('.update-meta') || null;
+    const metaPrev = metaEl ? metaEl.textContent : null;
+
     const rawCid = updateBtn.getAttribute('data-cid');
     const rawName = updateBtn.getAttribute('data-name');
 
     const prevDisabled = updateBtn.disabled;
     updateBtn.disabled = true;
+
+    if (metaEl) metaEl.textContent = 'Updating…';
 
     (async () => {
       let picked = null;
@@ -3170,6 +3176,8 @@ ingestedEl?.addEventListener('click', async (e) => {
         const msg = err?.message || String(err);
         panelEl.innerHTML = `<div class="empty">${escapeHtml(msg)}</div>`;
 
+        if (metaEl) metaEl.textContent = 'Update failed';
+
         idbGet(`${IDB_KEY_DB_PREFIX}${code}`)
           .then(async (buf) => {
             if (!buf) throw new Error('No stored database found for that count.');
@@ -3196,6 +3204,7 @@ ingestedEl?.addEventListener('click', async (e) => {
       })
       .finally(() => {
         updateBtn.disabled = prevDisabled;
+        if (metaEl && metaEl.textContent === 'Updating…') metaEl.textContent = metaPrev || '';
       });
 
     return;

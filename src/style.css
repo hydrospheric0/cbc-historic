@@ -662,6 +662,11 @@ h6 {
   padding: 0;
 }
 
+.update-button.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .update-button.delete-button {
   color: #b91c1c;
   border-color: rgba(185, 28, 28, 0.45);
