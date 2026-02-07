@@ -89,6 +89,8 @@ const CBC_126_CIRCLES_QUERY_URL =
 const MAX_CSV_BYTES = 10 * 1024 * 1024;
 const CURRENT_MAX_COUNT_INDEX = 125;
 
+const SEED_CODES = ['CAPC', 'CARC', 'WAPT'];
+
 function normalizeWorkerBaseUrl(raw) {
   const s = cleanText(raw || '');
   if (!s) return '';
@@ -302,7 +304,7 @@ const mainTemplate = `
         <div class="layout-cell layout-bottom-right">
           <div class="plot-pane card">
             <div id="plot" class="plot">
-              <div class="empty">Click on a species row above to plot</div>
+              <div class="empty">Click on species above to view</div>
               <div class="plot-overlay-controls">
                 <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
                 <button id="plotPopoutOverlayBtn" class="popout-button" type="button" aria-label="Pop out plot" title="Pop out">⤢</button>
@@ -938,16 +940,13 @@ function getActiveCircleCode() {
   return fromState || null;
 }
 
-function setSelectedCircle(next, { updateSearchValue = true, fetchIfMissing = false } = {}) {
+function setSelectedCircle(next, { fetchIfMissing = false } = {}) {
   selectedCircle = next || null;
   const token = bumpCirclePickToken();
   renderSelectedCircle();
   try {
     if (countSearchResultsEl) countSearchResultsEl.replaceChildren();
   } catch {
-  }
-  if (updateSearchValue && countSearchEl && selectedCircle) {
-    countSearchEl.value = `${selectedCircle.Name} (${selectedCircle.Abbrev})`;
   }
   if (lastIngestedIndex) renderIngestedCountsList(lastIngestedIndex);
   renderCountHeader();
@@ -972,7 +971,7 @@ function setSelectedCircle(next, { updateSearchValue = true, fetchIfMissing = fa
     clearLoadedCsvData();
     panelEl.innerHTML = '<div class="empty">Downloading circle data…</div>';
     summaryEl.innerHTML = '<div class="empty">Downloading…</div>';
-    clearPlot('Click on a species row above to plot');
+    clearPlot('Click on species above to view');
 
     (async () => {
       const name = selectedCircle?.Name || '';
@@ -1022,7 +1021,7 @@ function clearLoadedCsvData() {
     renderPanel(activeTab);
   } catch {
   }
-  clearPlot('Click on a species row above to plot');
+  clearPlot('Click on species above to view');
 }
 
 function setStoredCountCodesFromIndex(index) {
@@ -1030,7 +1029,7 @@ function setStoredCountCodesFromIndex(index) {
   storedCountCodes = next;
 }
 
-async function setSelectedCircleByCode(code, { updateSearchValue = true } = {}) {
+async function setSelectedCircleByCode(code, { updateSearchValue = false } = {}) {
   const needle = cleanText(code || '');
   if (!needle) {
     setSelectedCircle(null);
@@ -1470,7 +1469,7 @@ async function buildIndexRowFromSqliteBytes(code, buf) {
 }
 
 async function ensureSeedCountsImported() {
-  const seeds = ['CAPC', 'CARC', 'WAPT'];
+  const seeds = SEED_CODES;
   let idx;
   try {
     idx = await loadCountsIndex();
@@ -1695,7 +1694,30 @@ async function saveCurrentStateToSqlite() {
 }
 
 async function loadStateFromSqlite(code) {
-  const buf = await idbGet(`${IDB_KEY_DB_PREFIX}${code}`);
+  let buf = await idbGet(`${IDB_KEY_DB_PREFIX}${code}`);
+  if (!buf && SEED_CODES.includes(code)) {
+    try {
+      const seedUrl = new URL(`seed/${code}.sqlite`, window.location.href).toString();
+      const r = await fetch(seedUrl, { credentials: 'omit' });
+      if (r.ok) {
+        const ab = await r.arrayBuffer();
+        buf = ab;
+        try {
+          await idbSet(`${IDB_KEY_DB_PREFIX}${code}`, ab);
+          const idx = await loadCountsIndex();
+          const next = (idx || []).filter((row) => row.code !== code);
+          try {
+            const row = await buildIndexRowFromSqliteBytes(code, ab);
+            next.push(row);
+            await saveCountsIndex(next);
+          } catch {
+          }
+        } catch {
+        }
+      }
+    } catch {
+    }
+  }
   if (!buf) throw new Error('No stored database found for that count.');
   const SQL = await getSql();
   const db = new SQL.Database(new Uint8Array(buf));
@@ -2622,13 +2644,13 @@ async function plotLollipop({ x, y, title, markerColors = null }) {
 
 async function renderPlot(active) {
   if (!state.species) {
-    clearPlot('Click on a species row above to plot');
+    clearPlot('Click on species above to view');
     return;
   }
 
   if (active === 'species') {
     if (!state.selectedSpecies) {
-      clearPlot('Click on a species row above to plot');
+      clearPlot('Click on species above to view');
       return;
     }
     if (isSpRecord(state.selectedSpecies)) {
