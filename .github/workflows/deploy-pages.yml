@@ -31,6 +31,8 @@ jobs:
         run: npm ci
 
       - name: Build
+        env:
+          VITE_CBC_WORKER_BASE: ${{ vars.VITE_CBC_WORKER_BASE || secrets.VITE_CBC_WORKER_BASE }}
         run: npm run build
 
       - name: Configure Pages

@@ -89,6 +89,74 @@ const CBC_126_CIRCLES_QUERY_URL =
 const MAX_CSV_BYTES = 10 * 1024 * 1024;
 const CURRENT_MAX_COUNT_INDEX = 125;
 
+function normalizeWorkerBaseUrl(raw) {
+  const s = cleanText(raw || '');
+  if (!s) return '';
+  return s.replace(/\/+$/, '');
+}
+
+const CBC_WORKER_BASE_URL = normalizeWorkerBaseUrl(import.meta?.env?.VITE_CBC_WORKER_BASE);
+
+function buildWorkerCsvDownloadUrl({ abbrev, cid, sy, ey }) {
+  if (!CBC_WORKER_BASE_URL) return null;
+  const code = cleanText(abbrev || '');
+  const cidNum = typeof cid === 'number' ? cid : parseInt(String(cid || '').trim(), 10);
+  const syNum = typeof sy === 'number' ? sy : parseInt(String(sy || '').trim(), 10);
+  const eyNum = typeof ey === 'number' ? ey : parseInt(String(ey || '').trim(), 10);
+  if (!code || !Number.isFinite(cidNum)) return null;
+  const params = new URLSearchParams();
+  params.set('abbrev', code);
+  params.set('cid', String(cidNum));
+  params.set('sy', String(Number.isFinite(syNum) ? syNum : 1));
+  params.set('ey', String(Number.isFinite(eyNum) ? eyNum : CURRENT_MAX_COUNT_INDEX));
+  return `${CBC_WORKER_BASE_URL}/cbc/circle?${params.toString()}`;
+}
+
+async function fetchCircleCsvTextFromWorker({ abbrev, cid, sy, ey }) {
+  const url = buildWorkerCsvDownloadUrl({ abbrev, cid, sy, ey });
+  if (!url) throw new Error('CSV proxy is not configured. Set VITE_CBC_WORKER_BASE and rebuild the site.');
+
+  const r = await fetch(url, { method: 'GET', credentials: 'omit' });
+  if (!r.ok) {
+    const hint = r.status === 403 ? ' (origin not allowed by worker CORS)' : '';
+    throw new Error(`CSV proxy request failed: ${r.status}${hint}`);
+  }
+
+  const len = parseInt(r.headers.get('content-length') || '', 10);
+  if (Number.isFinite(len) && len > MAX_CSV_BYTES) throw new Error('CSV file is too large.');
+
+  const text = await r.text();
+  if (text.length > MAX_CSV_BYTES) throw new Error('CSV file is too large.');
+  return text;
+}
+
+function openUrlInNewTab(url) {
+  if (!url) return;
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+async function downloadAndIngestCircle({ abbrev, cid, name }) {
+  const code = cleanText(abbrev || '');
+  const cidNum = typeof cid === 'number' ? cid : parseInt(String(cid || '').trim(), 10);
+  if (!code || !Number.isFinite(cidNum)) throw new Error('Missing count circle code or ID.');
+
+  const workerUrl = buildWorkerCsvDownloadUrl({ abbrev: code, cid: cidNum, sy: 1, ey: CURRENT_MAX_COUNT_INDEX });
+  if (!workerUrl) {
+    throw new Error('CSV proxy is not configured. Set VITE_CBC_WORKER_BASE and rebuild the site.');
+  }
+
+  const csvText = await fetchCircleCsvTextFromWorker({ abbrev: code, cid: cidNum, sy: 1, ey: CURRENT_MAX_COUNT_INDEX });
+  const filenameBase = [name, code, cidNum].filter((x) => x).join('_').replace(/\s+/g, '_');
+  const f = new File([csvText], `${filenameBase || code}.csv`, { type: 'text/csv' });
+  await handleFile(f);
+}
+
 const KNOWN_COUNT_IDS = {
   CAPC: 57023,
   CASM: 57049,
@@ -134,8 +202,24 @@ const mainTemplate = `
       <div id="layoutGrid" class="layout-grid">
         <div class="layout-cell layout-top-left">
           <div class="layout-stack">
+            <div class="count-header card nav-header">
+              <div class="count-header-bar">
+                <div class="count-header-text">Navigation</div>
+                <div></div>
+              </div>
+            </div>
             <div class="sidebar-card nav-card card">
               <div class="cardBody">
+                <div class="count-search">
+                </div>
+                <div class="map-card">
+                  <div class="map-body">
+                    <div id="map" class="map">
+                      <div class="empty">No location loaded.</div>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="count-search">
                   <input
                     id="countSearch"
@@ -146,16 +230,9 @@ const mainTemplate = `
                     spellcheck="false"
                   />
                   <div id="countSearchResults" class="count-search-results" aria-label="Search results"></div>
-                  <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
                 </div>
 
-                <div class="dropzone-instructions">Due to data limitations, download your count circle data above and Drop the CSV below</div>
-
-                <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Drop CSV here">
-                  <div class="dropzone-title">Drop CSV</div>
-                  <div class="dropzone-sub">…or click to choose a file</div>
-                  <input id="fileInput" class="file-input" type="file" accept=".csv,text/csv" />
-                </div>
+                <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
 
                 <div class="section-title">Imported data</div>
                 <div id="ingested" class="summary">
@@ -165,6 +242,13 @@ const mainTemplate = `
                 <div class="section-title">Summary</div>
                 <div id="summary" class="summary">
                   <div class="empty">No CSV loaded.</div>
+                </div>
+
+                <div class="section-title">Resources</div>
+                <div class="resources-links">
+                  <a class="link" href="${CBC_RESULTS_URL}" target="_blank" rel="noopener noreferrer">Download Audubon CBC Count Results</a>
+                  <a class="link" href="${CBC_MAP_URL}" target="_blank" rel="noopener noreferrer">Audubon CBC map</a>
+                  <a class="link" href="${CBC_PORTAL_URL}" target="_blank" rel="noopener noreferrer">Audubon Application Portal</a>
                 </div>
               </div>
             </div>
@@ -191,7 +275,7 @@ const mainTemplate = `
                   <button id="tabEffort" class="tab-button" type="button">Effort</button>
                   <button id="tabParticipation" class="tab-button" type="button">Participation</button>
                 </div>
-                <button id="exportCsvBtn" class="export-button export-button-header" type="button" disabled>Export CSV</button>
+                <div id="downloadIndicator" class="download-indicator hidden" aria-live="polite">Downloading…</div>
               </div>
             </div>
 
@@ -213,35 +297,14 @@ const mainTemplate = `
           tabindex="0"
         ></div>
 
-        <div class="layout-cell layout-bottom-left">
-          <div class="layout-stack">
-            <div class="map-card card">
-              <div class="cardBody map-body">
-                <div id="map" class="map">
-                  <div class="empty">No location loaded.</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="resources-card card">
-              <div class="cardHeader">Resources</div>
-              <div class="cardBody resources-body">
-                <div class="resources-links">
-                  <a class="link" href="${CBC_RESULTS_URL}" target="_blank" rel="noopener noreferrer">Download Audubon CBC Count Results</a>
-                  <a class="link" href="${CBC_MAP_URL}" target="_blank" rel="noopener noreferrer">Audubon CBC map</a>
-                  <a class="link" href="${CBC_PORTAL_URL}" target="_blank" rel="noopener noreferrer">Audubon Application Portal</a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <div class="layout-cell layout-bottom-left"></div>
 
         <div class="layout-cell layout-bottom-right">
           <div class="plot-pane card">
             <div id="plot" class="plot">
-              <div class="empty">Plot appears here when a CSV is loaded.</div>
+              <div class="empty">Click on a species row above to plot</div>
               <div class="plot-overlay-controls">
-                <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Download plot" title="Download">⤓</button>
+                <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
                 <button id="plotPopoutOverlayBtn" class="popout-button" type="button" aria-label="Pop out plot" title="Pop out">⤢</button>
               </div>
             </div>
@@ -319,7 +382,7 @@ const plotPopoutTemplate = `
         <div id="plot" class="plot">
           <div class="empty">Waiting for data…</div>
           <div class="plot-overlay-controls">
-            <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Download plot" title="Download">⤓</button>
+            <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
             <select id="plotSpeciesSelect" class="panel-select" data-action="plot-species-select"></select>
           </div>
         </div>
@@ -337,7 +400,7 @@ const summaryEl = document.getElementById('summary');
 const mapEl = document.getElementById('map');
 const countHeaderEl = document.getElementById('countHeader');
 const countHeaderTextEl = document.getElementById('countHeaderText');
-const exportCsvBtnEl = document.getElementById('exportCsvBtn');
+const downloadIndicatorEl = document.getElementById('downloadIndicator');
 const panelHeaderEl = document.getElementById('panelHeader');
 const panelEl = document.getElementById('panel');
 const plotHeaderEl = document.getElementById('plotHeader');
@@ -345,6 +408,9 @@ const plotEl = document.getElementById('plot');
 const plotPopoutOverlayBtnEl = document.getElementById('plotPopoutOverlayBtn');
 const plotExportOverlayBtnEl = document.getElementById('plotExportOverlayBtn');
 const plotSpeciesSelectEl = document.getElementById('plotSpeciesSelect');
+
+let plotMountEl = null;
+let plotEmptyEl = null;
 
 const countSearchEl = document.getElementById('countSearch');
 const countSearchResultsEl = document.getElementById('countSearchResults');
@@ -354,7 +420,22 @@ const navCardEl = document.querySelector('.nav-card');
 const mapCardEl = document.querySelector('.map-card');
 const resourcesCardEl = document.querySelector('.resources-card');
 
+let lastIngestedIndex = null;
+
 panelHeaderEl?.addEventListener('click', (e) => {
+  const dlBtn = e.target?.closest?.('[data-action="export-table"]');
+  if (dlBtn) {
+    e.preventDefault();
+    if (!state.species) return;
+    const cfg = getTableConfig(activeTab);
+    const csv = rowsToCsv(cfg.rows || [], cfg.columns || []);
+    const ci = state.countInfo || {};
+    const base = sanitizeFilenamePart(ci.CountCode || ci.CountName || 'cbc');
+    const tab = sanitizeFilenamePart(cfg.title || activeTab);
+    downloadCsv(`${base}_${tab}.csv`, csv);
+    return;
+  }
+
   const popBtn = e.target?.closest?.('[data-action="popout-table"]');
   if (popBtn) {
     e.preventDefault();
@@ -385,7 +466,13 @@ plotPopoutOverlayBtnEl?.addEventListener('click', (e) => {
 
 plotExportOverlayBtnEl?.addEventListener('click', (e) => {
   e.preventDefault();
-  void downloadPngFromPlot();
+  if (!state.species) return;
+  const cfg = getTableConfig(activeTab);
+  const csv = rowsToCsv(cfg.rows || [], cfg.columns || []);
+  const ci = state.countInfo || {};
+  const base = sanitizeFilenamePart(ci.CountCode || ci.CountName || 'cbc');
+  const tab = sanitizeFilenamePart(cfg.title || activeTab);
+  downloadCsv(`${base}_${tab}.csv`, csv);
 });
 
 function renderPlotSpeciesOverlay() {
@@ -433,6 +520,16 @@ try {
 let leafletMap = null;
 let leafletMapMarker = null;
 let leafletCircle = null;
+let leafletAllCirclesLayer = null;
+let leafletCircleByCode = new Map();
+let leafletBaseLayerControl = null;
+let leafletBaseLayers = null;
+const LEAFLET_CIRCLES_PANE = 'cbcCircles';
+let circlesGeometryPromise = null;
+let circlesGeometry = null;
+let lastActiveCircleCode = null;
+
+let storedCountCodes = new Set();
 
 const GRID_COL_KEY = 'cbc-historic.grid.leftPx.v1';
 const GRID_ROW_KEY = 'cbc-historic.grid.topPx.v1';
@@ -499,8 +596,8 @@ function initGridSplit() {
   }
 
   const rect = layoutEl.getBoundingClientRect();
-  const defaultLeft = Math.round(rect.width * 0.32);
-  const defaultTop = Math.round(rect.height * 0.62);
+  const defaultLeft = Math.round(rect.width * 0.2);
+  const defaultTop = Math.round(rect.height * 0.6);
   let leftPx = readStoredPx(GRID_COL_KEY) ?? defaultLeft;
   let topPx = readStoredPx(GRID_ROW_KEY) ?? defaultTop;
 
@@ -579,10 +676,98 @@ function ensureLeafletMap() {
     attributionControl: true,
   }).setView([37.5, -120.5], 6);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 22,
+    maxNativeZoom: 19,
     attribution: '&copy; OpenStreetMap contributors',
-  }).addTo(leafletMap);
+  });
+
+  const esriSatellite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    {
+      maxZoom: 22,
+      maxNativeZoom: 19,
+      attribution: 'Tiles &copy; Esri',
+    }
+  );
+
+  const esriTopo = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    {
+      maxZoom: 22,
+      maxNativeZoom: 19,
+      attribution: 'Tiles &copy; Esri',
+    }
+  );
+
+  const tileErr = {
+    lastAt: 0,
+    burst: 0,
+    activeName: 'Esri Topo',
+  };
+
+  const noteActiveBaseLayer = (name) => {
+    tileErr.activeName = name;
+    tileErr.burst = 0;
+    tileErr.lastAt = 0;
+  };
+
+  const switchToOsmIfActive = () => {
+    if (!leafletMap) return;
+    if (tileErr.activeName === 'OpenStreetMap') return;
+    try {
+      if (leafletMap.hasLayer(esriTopo)) leafletMap.removeLayer(esriTopo);
+    } catch {
+    }
+    try {
+      if (leafletMap.hasLayer(esriSatellite)) leafletMap.removeLayer(esriSatellite);
+    } catch {
+    }
+    try {
+      osm.addTo(leafletMap);
+      noteActiveBaseLayer('OpenStreetMap');
+    } catch {
+    }
+  };
+
+  const attachTileErrorFallback = (layer, layerName) => {
+    if (!layer || !layer.on) return;
+    layer.on('tileerror', () => {
+      if (tileErr.activeName !== layerName) return;
+      const now = Date.now();
+      if (tileErr.lastAt && now - tileErr.lastAt < 8000) tileErr.burst += 1;
+      else tileErr.burst = 1;
+      tileErr.lastAt = now;
+      if (tileErr.burst >= 4) switchToOsmIfActive();
+    });
+  };
+
+  attachTileErrorFallback(esriTopo, 'Esri Topo');
+  attachTileErrorFallback(esriSatellite, 'Esri Satellite');
+
+  leafletBaseLayers = {
+    'Esri Topo': esriTopo,
+    'Esri Satellite': esriSatellite,
+    OpenStreetMap: osm,
+  };
+
+  esriTopo.addTo(leafletMap);
+  noteActiveBaseLayer('Esri Topo');
+  leafletBaseLayerControl = L.control.layers(leafletBaseLayers, null, { position: 'topright', collapsed: false });
+  leafletBaseLayerControl.addTo(leafletMap);
+
+  leafletMap.on('baselayerchange', (e) => {
+    const name = e?.name || '';
+    if (name === 'Esri Topo' || name === 'Esri Satellite' || name === 'OpenStreetMap') noteActiveBaseLayer(name);
+  });
+
+  try {
+    if (!leafletMap.getPane(LEAFLET_CIRCLES_PANE)) {
+      const pane = leafletMap.createPane(LEAFLET_CIRCLES_PANE);
+      pane.style.zIndex = '450';
+    }
+  } catch {
+  }
 
   try {
     setTimeout(() => {
@@ -638,55 +823,69 @@ initGridSplit();
 function updateMapFromState() {
   if (!mapEl) return;
   const ci = state?.countInfo || {};
-  const lat = typeof ci.Lat === 'number' ? ci.Lat : parseFloat(String(ci.Lat ?? '').trim());
-  const lon = typeof ci.Lon === 'number' ? ci.Lon : parseFloat(String(ci.Lon ?? '').trim());
-  const has = Number.isFinite(lat) && Number.isFinite(lon);
 
   const map = ensureLeafletMap();
   if (!map) return;
 
-  if (!has) {
-    if (leafletMapMarker) {
-      leafletMapMarker.remove();
-      leafletMapMarker = null;
+  const activeCode = getActiveCircleCode();
+
+  void ensureAllCirclesOnMap()
+    .then(() => {
+      setActiveCircleStyle(activeCode);
+      if (activeCode && leafletCircleByCode.has(activeCode)) {
+        try {
+          map.fitBounds(leafletCircleByCode.get(activeCode).getBounds(), { padding: [18, 18] });
+        } catch {
+        }
+      }
+    })
+    .catch(() => {});
+
+  setActiveCircleStyle(activeCode);
+
+  const lat = typeof ci.Lat === 'number' ? ci.Lat : parseFloat(String(ci.Lat ?? '').trim());
+  const lon = typeof ci.Lon === 'number' ? ci.Lon : parseFloat(String(ci.Lon ?? '').trim());
+  const has = Number.isFinite(lat) && Number.isFinite(lon);
+
+  if (leafletMapMarker) {
+    leafletMapMarker.remove();
+    leafletMapMarker = null;
+  }
+
+  if (has && activeCode && !leafletCircleByCode.has(activeCode)) {
+    const center = [lat, lon];
+    const radiusMeters = 7.5 * 1609.344;
+    if (!leafletCircle) {
+      leafletCircle = L.circle(center, {
+        radius: radiusMeters,
+        color: 'red',
+        weight: 2,
+        fill: true,
+        fillColor: 'red',
+        fillOpacity: 0,
+        interactive: false,
+        pane: LEAFLET_CIRCLES_PANE,
+      }).addTo(map);
+    } else {
+      leafletCircle.setLatLng(center);
+      leafletCircle.setRadius(radiusMeters);
     }
+    try {
+      map.fitBounds(leafletCircle.getBounds(), { padding: [18, 18] });
+    } catch {
+      map.setView(center, 10);
+    }
+  } else {
     if (leafletCircle) {
       leafletCircle.remove();
       leafletCircle = null;
     }
-    try {
-      map.setView([37.5, -120.5], 6);
-    } catch {
+    if (!activeCode) {
+      try {
+        map.setView([37.5, -120.5], 6);
+      } catch {
+      }
     }
-    try {
-      map.invalidateSize();
-    } catch {
-    }
-    return;
-  }
-
-  const center = [lat, lon];
-  if (!leafletMapMarker) leafletMapMarker = L.marker(center).addTo(map);
-  else leafletMapMarker.setLatLng(center);
-
-  const radiusMeters = 7.5 * 1609.344;
-  if (!leafletCircle) {
-    leafletCircle = L.circle(center, {
-      radius: radiusMeters,
-      color: 'red',
-      weight: 2,
-      fill: false,
-      fillOpacity: 0,
-    }).addTo(map);
-  } else {
-    leafletCircle.setLatLng(center);
-    leafletCircle.setRadius(radiusMeters);
-  }
-
-  try {
-    map.fitBounds(leafletCircle.getBounds(), { padding: [18, 18] });
-  } catch {
-    map.setView(center, 10);
   }
 
   try {
@@ -698,6 +897,152 @@ function updateMapFromState() {
 let circlesIndexPromise = null;
 let circlesIndex = null;
 let selectedCircle = null;
+let circlePickToken = 0;
+
+function bumpCirclePickToken() {
+  circlePickToken += 1;
+  return circlePickToken;
+}
+
+function setDownloadingIndicator(isOn) {
+  if (!downloadIndicatorEl) return;
+  downloadIndicatorEl.classList.toggle('hidden', !isOn);
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchJsonWithRetry(url, { tries = 4 } = {}) {
+  let lastErr = null;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      const r = await fetch(url, { credentials: 'omit' });
+      if (r.ok) return await r.json();
+      const retryable = r.status === 429 || r.status === 502 || r.status === 503 || r.status === 504;
+      if (!retryable) throw new Error(`HTTP ${r.status}`);
+      lastErr = new Error(`HTTP ${r.status}`);
+    } catch (e) {
+      lastErr = e;
+    }
+    if (attempt < tries - 1) {
+      const backoff = 350 * Math.pow(2, attempt);
+      await sleep(backoff);
+    }
+  }
+  throw lastErr || new Error('Request failed');
+}
+
+function getActiveCircleCode() {
+  const fromPick = cleanText(selectedCircle?.Abbrev || '');
+  if (fromPick) return fromPick;
+  const fromState = cleanText(state?.countInfo?.CountCode || '');
+  return fromState || null;
+}
+
+function setSelectedCircle(next, { updateSearchValue = true, fetchIfMissing = false } = {}) {
+  selectedCircle = next || null;
+  const token = bumpCirclePickToken();
+  renderSelectedCircle();
+  try {
+    if (countSearchResultsEl) countSearchResultsEl.replaceChildren();
+  } catch {
+  }
+  if (updateSearchValue && countSearchEl && selectedCircle) {
+    countSearchEl.value = `${selectedCircle.Name} (${selectedCircle.Abbrev})`;
+  }
+  if (lastIngestedIndex) renderIngestedCountsList(lastIngestedIndex);
+  renderCountHeader();
+  updateMapFromState();
+
+  const code = cleanText(selectedCircle?.Abbrev || '');
+  const cid = selectedCircle?.Circle_id;
+  const isStored = code && storedCountCodes.has(code);
+  if (fetchIfMissing && code && !isStored) {
+    if (!CBC_WORKER_BASE_URL) {
+      clearLoadedCsvData();
+      panelEl.innerHTML =
+        '<div class="empty">CSV proxy is not configured. Set <b>VITE_CBC_WORKER_BASE</b> and rebuild, or use a stored circle.</div>';
+      summaryEl.innerHTML =
+        '<div class="empty">CSV proxy is not configured. Set <b>VITE_CBC_WORKER_BASE</b> and rebuild.</div>';
+      setDownloadingIndicator(false);
+      requestSidebarSync();
+      return;
+    }
+
+    setDownloadingIndicator(true);
+    clearLoadedCsvData();
+    panelEl.innerHTML = '<div class="empty">Downloading circle data…</div>';
+    summaryEl.innerHTML = '<div class="empty">Downloading…</div>';
+    clearPlot('Click on a species row above to plot');
+
+    (async () => {
+      const name = selectedCircle?.Name || '';
+      await (async () => {
+        if (token !== circlePickToken) return;
+        if (cleanText(selectedCircle?.Abbrev || '') !== code) return;
+        await downloadAndIngestCircle({ abbrev: code, cid, name });
+      })();
+    })()
+      .catch((err) => {
+        const msg = err?.message || String(err);
+        panelEl.innerHTML = `<div class="empty">${escapeHtml(msg)}</div>`;
+        summaryEl.innerHTML = `<div class="empty">${escapeHtml(msg)}</div>`;
+      })
+      .finally(() => {
+        if (token !== circlePickToken) return;
+        setDownloadingIndicator(false);
+        requestSidebarSync();
+      });
+  } else {
+    setDownloadingIndicator(false);
+  }
+}
+
+function clearLoadedCsvData() {
+  state = {
+    ...state,
+    species: null,
+    weather: null,
+    effort: null,
+    participation: null,
+    meta: null,
+    sourceUrl: null,
+    maxCountIndex: null,
+    years: null,
+    yearsFull: null,
+    missingYears: null,
+    filename: null,
+    countInfo: null,
+    ranges: null,
+    selectedSpecies: null,
+    speciesFilterRare: false,
+    speciesFilterOwls: false,
+  };
+  renderSummary();
+  try {
+    renderPanel(activeTab);
+  } catch {
+  }
+  clearPlot('Click on a species row above to plot');
+}
+
+function setStoredCountCodesFromIndex(index) {
+  const next = new Set((index || []).map((r) => cleanText(r?.code || '')).filter(Boolean));
+  storedCountCodes = next;
+}
+
+async function setSelectedCircleByCode(code, { updateSearchValue = true } = {}) {
+  const needle = cleanText(code || '');
+  if (!needle) {
+    setSelectedCircle(null);
+    return;
+  }
+  try {
+    const rows = await ensureCirclesIndexLoaded();
+    const picked = rows.find((r) => r.Abbrev === needle);
+    if (picked) setSelectedCircle(picked, { updateSearchValue });
+  } catch {
+  }
+}
 
 async function loadCirclesIndex126() {
   const all = [];
@@ -712,9 +1057,7 @@ async function loadCirclesIndex126() {
     u.searchParams.set('resultOffset', String(offset));
     u.searchParams.set('resultRecordCount', String(pageSize));
 
-    const r = await fetch(u.toString(), { credentials: 'omit' });
-    if (!r.ok) throw new Error('Failed to load circle index.');
-    const data = await r.json();
+    const data = await fetchJsonWithRetry(u.toString(), { tries: 4 });
     const feats = data?.features || [];
     if (!Array.isArray(feats) || feats.length === 0) break;
     for (const ft of feats) {
@@ -743,6 +1086,178 @@ function ensureCirclesIndexLoaded() {
   return circlesIndexPromise;
 }
 
+async function loadCirclesGeometry126() {
+  const all = [];
+  const pageSize = 1000;
+  let offset = 0;
+  for (let page = 0; page < 10; page++) {
+    const u = new URL(CBC_126_CIRCLES_QUERY_URL);
+    u.searchParams.set('f', 'json');
+    u.searchParams.set('where', '1=1');
+    u.searchParams.set('outFields', 'Abbrev,Name,Circle_id');
+    u.searchParams.set('returnGeometry', 'true');
+    u.searchParams.set('outSR', '4326');
+    u.searchParams.set('resultOffset', String(offset));
+    u.searchParams.set('resultRecordCount', String(pageSize));
+
+    const data = await fetchJsonWithRetry(u.toString(), { tries: 4 });
+    const feats = data?.features || [];
+    if (!Array.isArray(feats) || feats.length === 0) break;
+    for (const ft of feats) {
+      const a = ft?.attributes || {};
+      const g = ft?.geometry || null;
+
+      const abbrev = cleanText(a.Abbrev || '');
+      const name = cleanText(a.Name || '');
+      const cid = typeof a.Circle_id === 'number' ? a.Circle_id : parseInt(String(a.Circle_id || '').trim(), 10);
+      if (!abbrev || !name || !Number.isFinite(cid) || !g) continue;
+
+      let lon = null;
+      let lat = null;
+      if (typeof g.x === 'number' && typeof g.y === 'number') {
+        lon = g.x;
+        lat = g.y;
+      } else if (Array.isArray(g.rings) && g.rings.length) {
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        for (const ring of g.rings) {
+          if (!Array.isArray(ring)) continue;
+          for (const pt of ring) {
+            if (!Array.isArray(pt) || pt.length < 2) continue;
+            const x = pt[0];
+            const y = pt[1];
+            if (typeof x !== 'number' || typeof y !== 'number') continue;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+        if (Number.isFinite(minX) && Number.isFinite(maxX) && Number.isFinite(minY) && Number.isFinite(maxY)) {
+          lon = (minX + maxX) / 2;
+          lat = (minY + maxY) / 2;
+        }
+      }
+
+      if (!(typeof lat === 'number' && Number.isFinite(lat) && typeof lon === 'number' && Number.isFinite(lon))) continue;
+      all.push({ Abbrev: abbrev, Name: name, Circle_id: cid, Lat: lat, Lon: lon });
+    }
+
+    offset += feats.length;
+    if (feats.length < pageSize) break;
+  }
+  all.sort((x, y) => x.Name.localeCompare(y.Name));
+  return all;
+}
+
+function ensureCirclesGeometryLoaded() {
+  if (circlesGeometry) return Promise.resolve(circlesGeometry);
+  if (!circlesGeometryPromise) {
+    circlesGeometryPromise = loadCirclesGeometry126().then((rows) => {
+      circlesGeometry = rows;
+      return rows;
+    });
+  }
+  return circlesGeometryPromise;
+}
+
+async function ensureAllCirclesOnMap() {
+  const map = ensureLeafletMap();
+  if (!map) return;
+  if (!leafletAllCirclesLayer) {
+    leafletAllCirclesLayer = L.layerGroup();
+    leafletAllCirclesLayer.addTo(map);
+  }
+  if (leafletCircleByCode.size > 0) return;
+
+  const rows = await ensureCirclesGeometryLoaded();
+  const radiusMeters = 7.5 * 1609.344;
+  for (const r of rows) {
+    const code = r.Abbrev;
+    if (!code || leafletCircleByCode.has(code)) continue;
+    const center = [r.Lat, r.Lon];
+
+    const isStored = storedCountCodes.has(code);
+    const baseColor = isStored ? 'orange' : '#4b6576';
+    const baseWeight = isStored ? 3 : 1;
+    const layer = L.circle(center, {
+      radius: radiusMeters,
+      color: baseColor,
+      weight: baseWeight,
+      opacity: isStored ? 1 : 0.75,
+      fill: true,
+      fillColor: baseColor,
+      fillOpacity: 0,
+      interactive: true,
+      pane: LEAFLET_CIRCLES_PANE,
+    });
+    layer.on('click', () => {
+      const picked = { Abbrev: r.Abbrev, Name: r.Name, Circle_id: r.Circle_id };
+      setSelectedCircle(picked, { fetchIfMissing: true });
+
+      if (storedCountCodes.has(code)) {
+        panelEl.innerHTML = '<div class="empty">Loading stored count…</div>';
+        loadStateFromSqlite(code).catch((err) => {
+          const msg = err?.message || String(err);
+          panelEl.innerHTML = `<div class="empty">Error: ${escapeHtml(msg)}</div>`;
+        });
+      } else {
+        clearLoadedCsvData();
+      }
+
+      requestSidebarSync();
+    });
+    layer.addTo(leafletAllCirclesLayer);
+    leafletCircleByCode.set(code, layer);
+  }
+}
+
+function applyStoredCircleStyles() {
+  for (const [code, layer] of leafletCircleByCode.entries()) {
+    if (!layer) continue;
+    const isActive = lastActiveCircleCode && code === lastActiveCircleCode;
+    if (isActive) continue;
+    const isStored = storedCountCodes.has(code);
+    const color = isStored ? 'orange' : '#4b6576';
+    try {
+      layer.setStyle({ color, weight: isStored ? 3 : 1, opacity: isStored ? 1 : 0.75 });
+      if (isStored && layer.bringToFront) layer.bringToFront();
+    } catch {
+    }
+  }
+}
+
+function setActiveCircleStyle(activeCode) {
+  const next = cleanText(activeCode || '');
+
+  if (lastActiveCircleCode && leafletCircleByCode.has(lastActiveCircleCode)) {
+    try {
+      const isStored = storedCountCodes.has(lastActiveCircleCode);
+      const prevColor = isStored ? 'orange' : '#4b6576';
+      leafletCircleByCode.get(lastActiveCircleCode).setStyle({
+        color: prevColor,
+        weight: isStored ? 3 : 1,
+        opacity: isStored ? 1 : 0.75,
+      });
+    } catch {
+    }
+  }
+
+  if (next && leafletCircleByCode.has(next)) {
+    try {
+      const layer = leafletCircleByCode.get(next);
+      layer.setStyle({ color: 'red', weight: 2, opacity: 1 });
+      if (layer.bringToFront) layer.bringToFront();
+    } catch {
+    }
+    lastActiveCircleCode = next;
+  } else {
+    lastActiveCircleCode = null;
+  }
+}
+
 function renderSelectedCircle() {
   if (!countSearchSelectedEl) return;
   if (!selectedCircle) {
@@ -751,37 +1266,18 @@ function renderSelectedCircle() {
     return;
   }
   countSearchSelectedEl.classList.remove('hidden');
-  const url = buildDefaultCsvDownloadUrl({ abbrev: selectedCircle.Abbrev, cid: selectedCircle.Circle_id });
+  const url =
+    buildWorkerCsvDownloadUrl({ abbrev: selectedCircle.Abbrev, cid: selectedCircle.Circle_id, sy: 1, ey: CURRENT_MAX_COUNT_INDEX }) ||
+    buildDefaultCsvDownloadUrl({ abbrev: selectedCircle.Abbrev, cid: selectedCircle.Circle_id });
   countSearchSelectedEl.replaceChildren();
 
-  const addRow = (k, v) => {
-    const row = document.createElement('div');
-    row.className = 'count-selected-row';
-    const kk = document.createElement('span');
-    kk.className = 'k';
-    kk.textContent = k;
-    const vv = document.createElement('span');
-    vv.textContent = String(v ?? '');
-    row.appendChild(kk);
-    row.appendChild(vv);
-    countSearchSelectedEl.appendChild(row);
-  };
-
-  addRow('Name', selectedCircle.Name);
-  addRow('Code', selectedCircle.Abbrev);
-  addRow('ID', String(selectedCircle.Circle_id));
-
-  const actions = document.createElement('div');
-  actions.className = 'count-selected-actions';
-  const a = document.createElement('a');
-  a.className = 'button-link';
-  a.textContent = 'Download CSV';
-  a.target = '_blank';
-  a.rel = 'noopener noreferrer';
-  if (url) a.href = url;
-  else a.href = '#';
-  actions.appendChild(a);
-  countSearchSelectedEl.appendChild(actions);
+  const line = document.createElement('div');
+  line.className = 'count-selected-line';
+  const name = String(selectedCircle.Name || '').trim();
+  const code = String(selectedCircle.Abbrev || '').trim();
+  const id = String(selectedCircle.Circle_id ?? '').trim();
+  line.textContent = [name, code, id].filter((x) => x).join(' | ');
+  countSearchSelectedEl.appendChild(line);
 }
 
 function renderCircleSearchResults(query, results) {
@@ -1020,10 +1516,14 @@ async function ensureSeedCountsImported() {
 function renderIngestedCountsList(index) {
   if (!ingestedEl) return;
   const rows = (index || []).slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  if (rows.length === 0) {
-    ingestedEl.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty', textContent: 'None yet.' }));
-    return;
-  }
+  lastIngestedIndex = index || [];
+  setStoredCountCodesFromIndex(lastIngestedIndex);
+  applyStoredCircleStyles();
+
+  const selectedCode = cleanText(selectedCircle?.Abbrev || '');
+  const shouldShowPending = selectedCode && !storedCountCodes.has(selectedCode);
+
+  const activeCode = getActiveCircleCode();
 
   const wrap = document.createElement('div');
   wrap.className = 'table-wrap';
@@ -1032,15 +1532,53 @@ function renderIngestedCountsList(index) {
 
   const thead = document.createElement('thead');
   const headRow = document.createElement('tr');
-  for (const h of ['Count', 'Code', 'Years', 'Update']) {
+  for (const h of ['Count circle', 'Code', 'Years', 'Delete']) {
     const th = document.createElement('th');
     th.textContent = h;
-    if (h === 'Update') th.className = 'col-update';
+    if (h === 'Delete') th.className = 'col-update';
     headRow.appendChild(th);
   }
   thead.appendChild(headRow);
 
   const tbody = document.createElement('tbody');
+
+  if (shouldShowPending) {
+    const tr = document.createElement('tr');
+    tr.dataset.code = selectedCode;
+    if (activeCode && selectedCode === activeCode) tr.classList.add('is-selected');
+
+    const tdName = document.createElement('td');
+    tdName.textContent = selectedCircle?.Name || 'Count';
+
+    const tdCode = document.createElement('td');
+    tdCode.textContent = selectedCode;
+
+    const tdRange = document.createElement('td');
+    tdRange.textContent = '—';
+
+    const tdUpdate = document.createElement('td');
+    tdUpdate.className = 'col-update';
+    const cell = document.createElement('div');
+    cell.className = 'update-cell';
+    const meta = document.createElement('span');
+    meta.className = 'update-meta';
+    meta.textContent = 'Not available locally';
+    cell.appendChild(meta);
+
+    tdUpdate.appendChild(cell);
+
+    tr.appendChild(tdName);
+    tr.appendChild(tdCode);
+    tr.appendChild(tdRange);
+    tr.appendChild(tdUpdate);
+    tbody.appendChild(tr);
+  }
+
+  if (rows.length === 0 && !shouldShowPending) {
+    ingestedEl.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty', textContent: 'None yet.' }));
+    return;
+  }
+
   for (const r of rows) {
     const name = r?.name || 'Count';
     const code = r?.code || '';
@@ -1048,6 +1586,8 @@ function renderIngestedCountsList(index) {
     const updatedText = formatShortDate(r?.updatedAt);
 
     const tr = document.createElement('tr');
+    tr.dataset.code = code;
+    if (activeCode && code && code === activeCode) tr.classList.add('is-selected');
 
     const tdName = document.createElement('td');
     const a = document.createElement('a');
@@ -1074,14 +1614,6 @@ function renderIngestedCountsList(index) {
       meta.textContent = `Updated ${updatedText}`;
       cell.appendChild(meta);
     }
-    const btnUpdate = document.createElement('button');
-    btnUpdate.className = 'update-button';
-    btnUpdate.type = 'button';
-    btnUpdate.dataset.action = 'update-count';
-    btnUpdate.dataset.code = code;
-    btnUpdate.setAttribute('aria-label', 'Update');
-    btnUpdate.title = 'Update';
-    btnUpdate.textContent = '↻';
 
     const btnDel = document.createElement('button');
     btnDel.className = 'update-button delete-button';
@@ -1092,7 +1624,6 @@ function renderIngestedCountsList(index) {
     btnDel.title = 'Delete';
     btnDel.textContent = 'X';
 
-    cell.appendChild(btnUpdate);
     cell.appendChild(btnDel);
     tdUpdate.appendChild(cell);
 
@@ -1207,6 +1738,8 @@ async function loadStateFromSqlite(code) {
   renderCountHeader();
   renderSummary();
   setActiveTab('species');
+
+  await setSelectedCircleByCode(state?.countInfo?.CountCode || code, { updateSearchValue: false });
 }
 
 function escapeHtmlForPlotText(s) {
@@ -1289,14 +1822,15 @@ function schedulePlotResize() {
     const P = plotlyRef;
     if (!P) return;
     try {
+      const target = plotMountEl || plotEl;
       const { width, height } = currentPlotSize();
       if (width && height) {
         try {
-          P.relayout(plotEl, { width, height });
+          P.relayout(target, { width, height });
         } catch {
         }
       }
-      P.Plots.resize(plotEl);
+      P.Plots.resize(target);
     } catch {
     }
   });
@@ -1324,6 +1858,36 @@ function currentPlotSize() {
     width: Number.isFinite(width) && width > 0 ? width : null,
     height: Number.isFinite(height) && height > 0 ? height : null,
   };
+}
+
+function ensurePlotScaffold() {
+  if (!plotEl) return { mount: null, empty: null };
+
+  if (!plotMountEl || !plotEl.contains(plotMountEl)) {
+    plotMountEl = plotEl.querySelector('[data-role="plot-mount"]');
+  }
+  if (!plotEmptyEl || !plotEl.contains(plotEmptyEl)) {
+    plotEmptyEl = plotEl.querySelector('[data-role="plot-empty"]') || plotEl.querySelector('.empty');
+    if (plotEmptyEl) plotEmptyEl.setAttribute('data-role', 'plot-empty');
+  }
+
+  if (!plotMountEl) {
+    plotMountEl = document.createElement('div');
+    plotMountEl.className = 'plot-mount';
+    plotMountEl.setAttribute('data-role', 'plot-mount');
+    plotMountEl.style.width = '100%';
+    plotMountEl.style.height = '100%';
+    plotEl.insertBefore(plotMountEl, plotEl.firstChild);
+  }
+
+  if (!plotEmptyEl) {
+    plotEmptyEl = document.createElement('div');
+    plotEmptyEl.className = 'empty';
+    plotEmptyEl.setAttribute('data-role', 'plot-empty');
+    plotEl.insertBefore(plotEmptyEl, plotMountEl.nextSibling);
+  }
+
+  return { mount: plotMountEl, empty: plotEmptyEl };
 }
 
 async function setActiveTab(name) {
@@ -1619,11 +2183,6 @@ function renderSummary() {
     ['File', state.filename || '—'],
     ['Count Name', ci.CountName || '—'],
     ['Count Code', ci.CountCode || '—'],
-    [
-      'Current Compiler',
-      cleanText([ci.CompilerFirstName, ci.CompilerLastName].filter(Boolean).join(' ')) || ci.CompilerName || '—',
-    ],
-    ['Compiler email', ci.CompilerEmail || '—'],
     ['Location', loc],
     ['Missing years', missingYearsText],
     ['Species years', r.speciesYears || '—'],
@@ -1651,8 +2210,13 @@ function renderSummary() {
 function renderCountHeader() {
   if (!countHeaderTextEl) return;
   if (!state.species) {
-    countHeaderTextEl.textContent = 'Load a CSV or select existing count data';
-    if (exportCsvBtnEl) exportCsvBtnEl.setAttribute('disabled', '');
+    const selCode = cleanText(selectedCircle?.Abbrev || '');
+    if (selectedCircle && selCode) {
+      const status = storedCountCodes.has(selCode) ? 'Stored' : 'Not downloaded yet';
+      countHeaderTextEl.textContent = `${selectedCircle.Name} (${selCode}) - ${status}`;
+    } else {
+      countHeaderTextEl.textContent = 'Load a CSV or select existing count data';
+    }
     requestSidebarSync();
     return;
   }
@@ -1664,7 +2228,6 @@ function renderCountHeader() {
   const parts = [cleanText(name), code, cleanText(range)].filter((p) => p);
   const line = parts.join(' - ');
   countHeaderTextEl.textContent = line;
-  if (exportCsvBtnEl) exportCsvBtnEl.removeAttribute('disabled');
   requestSidebarSync();
 }
 
@@ -1749,6 +2312,10 @@ function renderPanel(active) {
 
   const cfg = getTableConfig(active);
   const actions = [];
+
+  actions.push(
+    `<button class="popout-button" type="button" data-action="export-table" aria-label="Download table" title="Download">⤓</button>`
+  );
   if (active === 'species') {
     actions.push(
       `<button type="button" class="tab-button${state.speciesFilterRare ? ' active' : ''}" data-action="toggle-species-filter" data-filter="rare">Rare</button>`,
@@ -1763,7 +2330,6 @@ function renderPanel(active) {
   const titleHtml = `
     <div class="panel-title">
       ${escapeHtml(cfg.title)}
-      <span class="panel-sub">${escapeHtml(cfg.range)}</span>
     </div>
   `;
   const actionsHtml = actions.length ? `<div class="panel-actions">${actions.join('')}</div>` : '';
@@ -1901,20 +2467,38 @@ function downloadCsv(filename, csvText) {
 
 function clearPlot(msg) {
   if (!plotEl) return;
+  const { mount, empty } = ensurePlotScaffold();
   const P = plotlyRef;
-  if (P) {
+  if (P && mount) {
     try {
-      P.purge(plotEl);
+      P.purge(mount);
     } catch {
     }
   }
   setPlotHeader({ title: 'Plot', enableExport: false });
-  plotEl.innerHTML = `<div class="empty">${escapeHtml(msg)}</div>`;
+  if (mount) {
+    try {
+      mount.replaceChildren();
+    } catch {
+      mount.innerHTML = '';
+    }
+  }
+  if (empty) {
+    empty.textContent = msg;
+    empty.style.display = '';
+  }
 }
 
 async function plotLollipop({ x, y, title, markerColors = null }) {
   if (!plotEl) return;
-  plotEl.innerHTML = '';
+  const { mount, empty } = ensurePlotScaffold();
+  if (!mount) return;
+  if (empty) empty.style.display = 'none';
+  try {
+    mount.replaceChildren();
+  } catch {
+    mount.innerHTML = '';
+  }
 
   const Plotly = await getPlotly();
   const n = Math.min(x.length, y.length);
@@ -2032,19 +2616,19 @@ async function plotLollipop({ x, y, title, markerColors = null }) {
     },
   };
 
-  Plotly.newPlot(plotEl, traces, layout, plotlyConfig());
+  Plotly.newPlot(mount, traces, layout, plotlyConfig());
   schedulePlotResize();
 }
 
 async function renderPlot(active) {
   if (!state.species) {
-    clearPlot('Plot appears here when a CSV is loaded.');
+    clearPlot('Click on a species row above to plot');
     return;
   }
 
   if (active === 'species') {
     if (!state.selectedSpecies) {
-      clearPlot('Click a species name to plot.');
+      clearPlot('Click on a species row above to plot');
       return;
     }
     if (isSpRecord(state.selectedSpecies)) {
@@ -2096,7 +2680,14 @@ async function renderPlot(active) {
     const weatherTitle = `${countDisplayName()} - Weather - ${normalizeRangeForTitle(state.ranges?.weatherYears || yearRangeStr(x))}`;
 
     setPlotHeader({ title: weatherTitle, enableExport: true });
-    plotEl.innerHTML = '';
+    const { mount, empty } = ensurePlotScaffold();
+    if (!mount) return;
+    if (empty) empty.style.display = 'none';
+    try {
+      mount.replaceChildren();
+    } catch {
+      mount.innerHTML = '';
+    }
     const Plotly = await getPlotly();
     const traces = [
       {
@@ -2144,7 +2735,7 @@ async function renderPlot(active) {
       ...(width ? { width } : {}),
       ...(height ? { height } : {}),
     };
-    Plotly.newPlot(plotEl, traces, sizedLayout, plotlyConfig());
+    Plotly.newPlot(mount, traces, sizedLayout, plotlyConfig());
     schedulePlotResize();
     return;
   }
@@ -2188,11 +2779,14 @@ async function downloadPngFromPlot() {
   if (!plotEl) return;
   if (!state.species) return;
 
+  const { mount } = ensurePlotScaffold();
+  if (!mount) return;
+
   const title = currentPlotTitle || `${countDisplayName()} - ${activeTab}`;
   const filename = `${sanitizeFilenamePart(title)}.png`;
 
   const Plotly = await getPlotly();
-  Plotly.toImage(plotEl, { format: 'png', scale: 2 })
+  Plotly.toImage(mount, { format: 'png', scale: 2 })
     .then((dataUrl) => {
       const a = document.createElement('a');
       a.href = dataUrl;
@@ -2314,6 +2908,8 @@ async function handleFile(file) {
     renderSummary();
     setActiveTab('species');
 
+    await setSelectedCircleByCode(state?.countInfo?.CountCode || '');
+
     setTimeout(() => {
       if (leafletMap) leafletMap.invalidateSize();
     }, 0);
@@ -2327,16 +2923,6 @@ async function handleFile(file) {
   }
 }
 
-exportCsvBtnEl?.addEventListener('click', () => {
-  if (!state.species) return;
-  const cfg = getTableConfig(activeTab);
-  const csv = rowsToCsv(cfg.rows || [], cfg.columns || []);
-  const ci = state.countInfo || {};
-  const base = sanitizeFilenamePart(ci.CountCode || ci.CountName || 'cbc');
-  const tab = sanitizeFilenamePart(cfg.title || activeTab);
-  downloadCsv(`${base}_${tab}.csv`, csv);
-});
-
 panelEl?.addEventListener('click', (e) => {
   const cell = e.target?.closest?.('[data-action="plot-species"]');
   if (!cell) return;
@@ -2347,7 +2933,7 @@ panelEl?.addEventListener('click', (e) => {
   renderPlot('species');
 });
 
-ingestedEl?.addEventListener('click', (e) => {
+ingestedEl?.addEventListener('click', async (e) => {
   const deleteBtn = e.target?.closest?.('[data-action="delete-count"]');
   if (deleteBtn) {
     e.preventDefault();
@@ -2404,53 +2990,62 @@ ingestedEl?.addEventListener('click', (e) => {
     const code = updateBtn.getAttribute('data-code');
     if (!code) return;
 
-    if (KNOWN_COUNT_IDS[code]) {
-      const url = buildDefaultCsvDownloadUrl({ abbrev: code, cid: KNOWN_COUNT_IDS[code] });
-      if (url) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+    const prevDisabled = updateBtn.disabled;
+    updateBtn.disabled = true;
+
+    (async () => {
+      let picked = null;
+
+      if (KNOWN_COUNT_IDS[code]) {
+        picked = { Abbrev: code, Circle_id: KNOWN_COUNT_IDS[code] };
+      } else {
+        try {
+          const rows = await ensureCirclesIndexLoaded();
+          const hit = (rows || []).find((r) => r?.Abbrev === code);
+          if (hit && Number.isFinite(Number(hit.Circle_id))) {
+            picked = { Abbrev: hit.Abbrev, Circle_id: hit.Circle_id, Name: hit.Name };
+          }
+        } catch {
+        }
+      }
+
+      if (picked) {
+        await downloadAndIngestCircle({ abbrev: picked.Abbrev, cid: picked.Circle_id, name: picked.Name || '' });
         return;
       }
-    }
 
-    idbGet(`${IDB_KEY_DB_PREFIX}${code}`)
-      .then(async (buf) => {
-        if (!buf) throw new Error('No stored database found for that count.');
-        const SQL = await getSql();
-        const db = new SQL.Database(new Uint8Array(buf));
-        const resUrl = db.exec('SELECT value FROM kv WHERE key = ' + JSON.stringify('sourceUrl'));
-        const resCi = db.exec('SELECT value FROM kv WHERE key = ' + JSON.stringify('countInfo'));
-        db.close();
-
-        const rawUrl = resUrl?.[0]?.values?.[0]?.[0] ? JSON.parse(resUrl[0].values[0][0]) : null;
-        const rawCountInfo = resCi?.[0]?.values?.[0]?.[0] ? JSON.parse(resCi[0].values[0][0]) : null;
-        const url =
-          normalizeUpdateUrl(rawUrl) ||
-          normalizeUpdateUrl(
-            buildHistoricalSourceUrl({
-              countInfo: rawCountInfo || { CountCode: code },
-              sy: 1,
-              ey: CURRENT_MAX_COUNT_INDEX,
-            })
-          );
-        if (!url) throw new Error('No source URL available for this count. Re-ingest the file to compute it.');
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      })
+      throw new Error('Could not resolve circle ID for update.');
+    })()
       .catch((err) => {
         const msg = err?.message || String(err);
-        panelEl.innerHTML = `<div class="empty">Error: ${escapeHtml(msg)}</div>`;
+        panelEl.innerHTML = `<div class="empty">${escapeHtml(msg)}</div>`;
+
+        idbGet(`${IDB_KEY_DB_PREFIX}${code}`)
+          .then(async (buf) => {
+            if (!buf) throw new Error('No stored database found for that count.');
+            const SQL = await getSql();
+            const db = new SQL.Database(new Uint8Array(buf));
+            const resUrl = db.exec('SELECT value FROM kv WHERE key = ' + JSON.stringify('sourceUrl'));
+            const resCi = db.exec('SELECT value FROM kv WHERE key = ' + JSON.stringify('countInfo'));
+            db.close();
+
+            const rawUrl = resUrl?.[0]?.values?.[0]?.[0] ? JSON.parse(resUrl[0].values[0][0]) : null;
+            const rawCountInfo = resCi?.[0]?.values?.[0]?.[0] ? JSON.parse(resCi[0].values[0][0]) : null;
+            const url =
+              normalizeUpdateUrl(rawUrl) ||
+              normalizeUpdateUrl(
+                buildHistoricalSourceUrl({
+                  countInfo: rawCountInfo || { CountCode: code },
+                  sy: 1,
+                  ey: CURRENT_MAX_COUNT_INDEX,
+                })
+              );
+            openUrlInNewTab(url);
+          })
+          .catch(() => {});
+      })
+      .finally(() => {
+        updateBtn.disabled = prevDisabled;
       });
 
     return;
@@ -2484,10 +3079,7 @@ countSearchResultsEl?.addEventListener('click', async (e) => {
   const rows = await ensureCirclesIndexLoaded();
   const picked = rows.find((r) => r.Abbrev === code);
   if (!picked) return;
-  selectedCircle = picked;
-  renderSelectedCircle();
-  if (countSearchResultsEl) countSearchResultsEl.innerHTML = '';
-  if (countSearchEl) countSearchEl.value = `${picked.Name} (${picked.Abbrev})`;
+  setSelectedCircle(picked, { fetchIfMissing: true });
 });
 
 function onPickFile() {
