@@ -1651,6 +1651,19 @@ function renderIngestedCountsList(index) {
     meta.textContent = 'Not available locally';
     cell.appendChild(meta);
 
+    const btnUp = document.createElement('button');
+    btnUp.className = 'update-button';
+    btnUp.type = 'button';
+    btnUp.dataset.action = 'update-count';
+    btnUp.dataset.code = selectedCode;
+    if (Number.isFinite(Number(selectedCircle?.Circle_id))) btnUp.dataset.cid = String(selectedCircle.Circle_id);
+    if (selectedCircle?.Name) btnUp.dataset.name = String(selectedCircle.Name);
+    btnUp.setAttribute('aria-label', 'Update');
+    btnUp.title = CBC_WORKER_BASE_URL ? 'Download and store' : 'CSV proxy is not configured';
+    btnUp.textContent = '↻';
+    if (!CBC_WORKER_BASE_URL) btnUp.disabled = true;
+    cell.appendChild(btnUp);
+
     tdUpdate.appendChild(cell);
 
     tr.appendChild(tdName);
@@ -3109,15 +3122,25 @@ ingestedEl?.addEventListener('click', async (e) => {
     const code = updateBtn.getAttribute('data-code');
     if (!code) return;
 
+    const rawCid = updateBtn.getAttribute('data-cid');
+    const rawName = updateBtn.getAttribute('data-name');
+
     const prevDisabled = updateBtn.disabled;
     updateBtn.disabled = true;
 
     (async () => {
       let picked = null;
 
-      if (KNOWN_COUNT_IDS[code]) {
+      if (rawCid) {
+        const cidNum = parseInt(String(rawCid).trim(), 10);
+        if (Number.isFinite(cidNum)) {
+          picked = { Abbrev: code, Circle_id: cidNum, Name: rawName || '' };
+        }
+      }
+
+      if (!picked && KNOWN_COUNT_IDS[code]) {
         picked = { Abbrev: code, Circle_id: KNOWN_COUNT_IDS[code] };
-      } else {
+      } else if (!picked) {
         try {
           const rows = await ensureCirclesIndexLoaded();
           const hit = (rows || []).find((r) => r?.Abbrev === code);
@@ -3132,8 +3155,10 @@ ingestedEl?.addEventListener('click', async (e) => {
         await updateStoredCircleFromWorker({ abbrev: picked.Abbrev, cid: picked.Circle_id, name: picked.Name || '' });
 
         const currentCode = cleanText(state?.countInfo?.CountCode || '');
-        if (currentCode && currentCode === code) {
-          panelEl.innerHTML = '<div class="empty">Refreshing view…</div>';
+        const isCurrent = currentCode && currentCode === code;
+        const isSelected = cleanText(selectedCircle?.Abbrev || '') === cleanText(code);
+        if (isCurrent || isSelected || !state?.species) {
+          panelEl.innerHTML = '<div class="empty">Loading…</div>';
           await loadStateFromSqlite(code);
         }
         return;
