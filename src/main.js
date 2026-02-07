@@ -159,6 +159,93 @@ async function downloadAndIngestCircle({ abbrev, cid, name }) {
   await handleFile(f);
 }
 
+function u8ToArrayBuffer(u8) {
+  if (!u8) return null;
+  if (u8 instanceof ArrayBuffer) return u8;
+  if (ArrayBuffer.isView(u8)) {
+    return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+  }
+  return null;
+}
+
+async function buildSqliteBytesFromParsed(parsed) {
+  const SQL = await getSql();
+  const db = new SQL.Database();
+
+  db.run('CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+  const put = db.prepare('INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)');
+  const saveJson = (key, value) => {
+    put.run([key, JSON.stringify(value)]);
+  };
+
+  saveJson('countInfo', parsed?.countInfo || null);
+  saveJson('ranges', parsed?.ranges || null);
+  saveJson('years', parsed?.years || []);
+  saveJson('yearsFull', parsed?.yearsFull || []);
+  saveJson('missingYears', parsed?.missingYears || []);
+  saveJson('meta', parsed?.meta || []);
+  saveJson('sourceUrl', parsed?.sourceUrl || null);
+  saveJson('maxCountIndex', parsed?.maxCountIndex || null);
+  saveJson('species', parsed?.species || []);
+  saveJson('weather', parsed?.weather || []);
+  saveJson('effort', parsed?.effort || []);
+  saveJson('participation', parsed?.participation || []);
+  saveJson('savedAt', new Date().toISOString());
+  put.free();
+
+  const bytes = db.export();
+  db.close();
+  return bytes;
+}
+
+async function storeSqliteBytesForCode(code, sqliteBytes) {
+  const needle = cleanText(code || '');
+  const ab = u8ToArrayBuffer(sqliteBytes);
+  if (!needle || !ab) throw new Error('Missing code or database bytes.');
+
+  await idbSet(`${IDB_KEY_DB_PREFIX}${needle}`, ab);
+
+  let idx;
+  try {
+    idx = await loadCountsIndex();
+  } catch {
+    idx = [];
+  }
+
+  const next = (idx || []).filter((r) => r?.code !== needle);
+  try {
+    const row = await buildIndexRowFromSqliteBytes(needle, ab);
+    next.push(row);
+  } catch {
+    const now = Date.now();
+    next.push({ code: needle, name: needle, range: '—', maxCountIndex: null, updatedAt: now });
+  }
+
+  await saveCountsIndex(next);
+  renderIngestedCountsList(next);
+}
+
+async function updateStoredCircleFromWorker({ abbrev, cid, name }) {
+  const code = cleanText(abbrev || '');
+  const cidNum = typeof cid === 'number' ? cid : parseInt(String(cid || '').trim(), 10);
+  if (!code || !Number.isFinite(cidNum)) throw new Error('Missing count circle code or ID.');
+
+  const workerUrl = buildWorkerCsvDownloadUrl({ abbrev: code, cid: cidNum, sy: 1, ey: CURRENT_MAX_COUNT_INDEX });
+  if (!workerUrl) throw new Error('CSV proxy is not configured. Set VITE_CBC_WORKER_BASE and rebuild the site.');
+
+  setDownloadingIndicator(true);
+  try {
+    const csvText = await fetchCircleCsvTextFromWorker({ abbrev: code, cid: cidNum, sy: 1, ey: CURRENT_MAX_COUNT_INDEX });
+    const filenameBase = [name, code, cidNum].filter((x) => x).join('_').replace(/\s+/g, '_');
+    const f = new File([csvText], `${filenameBase || code}.csv`, { type: 'text/csv' });
+    const parsed = await parseUploadedFile(f);
+    const sqliteBytes = await buildSqliteBytesFromParsed(parsed);
+    await storeSqliteBytesForCode(code, sqliteBytes);
+  } finally {
+    setDownloadingIndicator(false);
+  }
+}
+
 const KNOWN_COUNT_IDS = {
   CAPC: 57023,
   CASM: 57049,
@@ -1531,10 +1618,10 @@ function renderIngestedCountsList(index) {
 
   const thead = document.createElement('thead');
   const headRow = document.createElement('tr');
-  for (const h of ['Count circle', 'Code', 'Years', 'Delete']) {
+  for (const h of ['Count circle', 'Code', 'Years', 'Actions']) {
     const th = document.createElement('th');
     th.textContent = h;
-    if (h === 'Delete') th.className = 'col-update';
+    if (h === 'Actions') th.className = 'col-update';
     headRow.appendChild(th);
   }
   thead.appendChild(headRow);
@@ -1614,6 +1701,15 @@ function renderIngestedCountsList(index) {
       cell.appendChild(meta);
     }
 
+    const btnUp = document.createElement('button');
+    btnUp.className = 'update-button';
+    btnUp.type = 'button';
+    btnUp.dataset.action = 'update-count';
+    btnUp.dataset.code = code;
+    btnUp.setAttribute('aria-label', 'Update');
+    btnUp.title = 'Update';
+    btnUp.textContent = '↻';
+
     const btnDel = document.createElement('button');
     btnDel.className = 'update-button delete-button';
     btnDel.type = 'button';
@@ -1623,6 +1719,7 @@ function renderIngestedCountsList(index) {
     btnDel.title = 'Delete';
     btnDel.textContent = 'X';
 
+    cell.appendChild(btnUp);
     cell.appendChild(btnDel);
     tdUpdate.appendChild(cell);
 
@@ -2996,7 +3093,7 @@ ingestedEl?.addEventListener('click', async (e) => {
         renderSummary();
         panelHeaderEl.innerHTML = '';
         panelEl.innerHTML = '<div class="empty">Table appears here when a CSV is loaded.</div>';
-        clearPlot('Plot appears here when a CSV is loaded.');
+        clearPlot('Click on species above to view');
       }
     })().catch((err) => {
       const msg = err?.message || String(err);
@@ -3032,7 +3129,13 @@ ingestedEl?.addEventListener('click', async (e) => {
       }
 
       if (picked) {
-        await downloadAndIngestCircle({ abbrev: picked.Abbrev, cid: picked.Circle_id, name: picked.Name || '' });
+        await updateStoredCircleFromWorker({ abbrev: picked.Abbrev, cid: picked.Circle_id, name: picked.Name || '' });
+
+        const currentCode = cleanText(state?.countInfo?.CountCode || '');
+        if (currentCode && currentCode === code) {
+          panelEl.innerHTML = '<div class="empty">Refreshing view…</div>';
+          await loadStateFromSqlite(code);
+        }
         return;
       }
 
