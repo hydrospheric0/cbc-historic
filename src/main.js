@@ -97,7 +97,8 @@ function normalizeWorkerBaseUrl(raw) {
   return s.replace(/\/+$/, '');
 }
 
-const CBC_WORKER_BASE_URL = normalizeWorkerBaseUrl(import.meta?.env?.VITE_CBC_WORKER_BASE);
+const DEFAULT_CBC_WORKER_BASE_URL = 'https://cbc-historic-cbc-proxy.cbc-weather.workers.dev';
+const CBC_WORKER_BASE_URL = normalizeWorkerBaseUrl(import.meta?.env?.VITE_CBC_WORKER_BASE || DEFAULT_CBC_WORKER_BASE_URL);
 
 function buildWorkerCsvDownloadUrl({ abbrev, cid, sy, ey }) {
   if (!CBC_WORKER_BASE_URL) return null;
@@ -3177,30 +3178,6 @@ ingestedEl?.addEventListener('click', async (e) => {
         panelEl.innerHTML = `<div class="empty">${escapeHtml(msg)}</div>`;
 
         if (metaEl) metaEl.textContent = 'Update failed';
-
-        idbGet(`${IDB_KEY_DB_PREFIX}${code}`)
-          .then(async (buf) => {
-            if (!buf) throw new Error('No stored database found for that count.');
-            const SQL = await getSql();
-            const db = new SQL.Database(new Uint8Array(buf));
-            const resUrl = db.exec('SELECT value FROM kv WHERE key = ' + JSON.stringify('sourceUrl'));
-            const resCi = db.exec('SELECT value FROM kv WHERE key = ' + JSON.stringify('countInfo'));
-            db.close();
-
-            const rawUrl = resUrl?.[0]?.values?.[0]?.[0] ? JSON.parse(resUrl[0].values[0][0]) : null;
-            const rawCountInfo = resCi?.[0]?.values?.[0]?.[0] ? JSON.parse(resCi[0].values[0][0]) : null;
-            const url =
-              normalizeUpdateUrl(rawUrl) ||
-              normalizeUpdateUrl(
-                buildHistoricalSourceUrl({
-                  countInfo: rawCountInfo || { CountCode: code },
-                  sy: 1,
-                  ey: CURRENT_MAX_COUNT_INDEX,
-                })
-              );
-            openUrlInNewTab(url);
-          })
-          .catch(() => {});
       })
       .finally(() => {
         updateBtn.disabled = prevDisabled;
