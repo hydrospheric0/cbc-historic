@@ -457,7 +457,7 @@ const tablePopoutTemplate = `
       <div class="table-pane card" style="width: 100%; height: 100%;">
         <div id="panelHeader" class="panel-header"></div>
         <div id="panel" class="panel">
-          <div class="empty">Waiting for data…</div>
+          <div class="empty">Select a circle to load data</div>
         </div>
       </div>
     </div>
@@ -469,7 +469,7 @@ const plotPopoutTemplate = `
     <div class="content-row">
       <div class="plot-pane card" style="width: 100%; height: 100%;">
         <div id="plot" class="plot">
-          <div class="empty">Waiting for data…</div>
+          <div class="empty">Click on species above to view</div>
           <div class="plot-overlay-controls">
             <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
             <select id="plotSpeciesSelect" class="panel-select" data-action="plot-species-select"></select>
