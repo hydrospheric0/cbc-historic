@@ -32,3 +32,4 @@ dist/
 
 # Local helper scripts (not tracked)
 pushit.sh
+start.sh

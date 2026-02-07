@@ -35,6 +35,51 @@ function getSql() {
 
 const app = document.querySelector('#app');
 
+const _urlParams = new URLSearchParams(window.location.search);
+const POPOUT_MODE = _urlParams.get('popout');
+const POPOUT_ID = _urlParams.get('popoutId');
+const IS_POPOUT_TABLE = POPOUT_MODE === 'table';
+const IS_POPOUT_PLOT = POPOUT_MODE === 'plot';
+const IS_POPOUT = IS_POPOUT_TABLE || IS_POPOUT_PLOT;
+
+const POPOUT_CHANNEL_NAME = 'cbc-historic.popout.v1';
+const popoutChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(POPOUT_CHANNEL_NAME) : null;
+const pendingPopouts = new Map();
+
+try {
+  document.body.classList.toggle('is-popout', IS_POPOUT);
+  document.body.classList.toggle('is-popout-table', IS_POPOUT_TABLE);
+  document.body.classList.toggle('is-popout-plot', IS_POPOUT_PLOT);
+} catch {
+}
+
+function makePopoutId() {
+  try {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  } catch {
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function buildPopoutUrl(mode, id) {
+  const u = new URL(window.location.href);
+  u.searchParams.set('popout', mode);
+  u.searchParams.set('popoutId', id);
+  return u.toString();
+}
+
+function safeClone(obj) {
+  try {
+    if (typeof structuredClone === 'function') return structuredClone(obj);
+  } catch {
+  }
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch {
+    return null;
+  }
+}
+
 const CBC_RESULTS_URL = 'https://netapp.audubon.org/CBCObservation/Historical/ResultsByCount.aspx';
 const CBC_HISTORICAL_RESULTS_URL = 'https://netapp.audubon.org/CBCObservation/Reports/HistoricalResultsByCount.aspx';
 const CBC_MAP_URL = 'https://gis.audubon.org/christmasbirdcount/';
@@ -77,7 +122,7 @@ function formatShortDate(ts) {
   return `${mm}/${dd}/${yy}`;
 }
 
-app.innerHTML = `
+const mainTemplate = `
   <div class="app">
     <header class="topbar">
       <div class="topbarTitle">Christmas Bird Count Historical Data</div>
@@ -86,92 +131,123 @@ app.innerHTML = `
 
     <div class="content-row">
 
-    <aside class="sidebar">
-    <div class="sidebar-card nav-card card">
-      <div class="cardBody">
-        <div class="count-search">
-          <input
-            id="countSearch"
-            class="count-search-input"
-            type="text"
-            placeholder="Type count name or code (e.g. Putah, CAPC, Cosumnes)"
-            autocomplete="off"
-            spellcheck="false"
-          />
-          <div id="countSearchResults" class="count-search-results" aria-label="Search results"></div>
-          <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
-        </div>
+      <div id="layoutGrid" class="layout-grid">
+        <div class="layout-cell layout-top-left">
+          <div class="layout-stack">
+            <div class="sidebar-card nav-card card">
+              <div class="cardBody">
+                <div class="count-search">
+                  <input
+                    id="countSearch"
+                    class="count-search-input"
+                    type="text"
+                    placeholder="Type count name or code (e.g. Putah, CAPC, Cosumnes)"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <div id="countSearchResults" class="count-search-results" aria-label="Search results"></div>
+                  <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
+                </div>
 
-        <div class="dropzone-instructions">Due to data limitations, download your count circle data above and Drop the CSV below</div>
+                <div class="dropzone-instructions">Due to data limitations, download your count circle data above and Drop the CSV below</div>
 
-        <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Drop CSV here">
-          <div class="dropzone-title">Drop CSV</div>
-          <div class="dropzone-sub">…or click to choose a file</div>
-          <input id="fileInput" class="file-input" type="file" accept=".csv,text/csv" />
-        </div>
+                <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Drop CSV here">
+                  <div class="dropzone-title">Drop CSV</div>
+                  <div class="dropzone-sub">…or click to choose a file</div>
+                  <input id="fileInput" class="file-input" type="file" accept=".csv,text/csv" />
+                </div>
 
-        <div class="section-title">Imported data</div>
-        <div id="ingested" class="summary">
-          <div class="empty">None yet.</div>
-        </div>
+                <div class="section-title">Imported data</div>
+                <div id="ingested" class="summary">
+                  <div class="empty">None yet.</div>
+                </div>
 
-        <div class="section-title">Summary</div>
-        <div id="summary" class="summary">
-          <div class="empty">No CSV loaded.</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="sidebar-card map-card card">
-      <div class="cardBody map-body">
-        <div id="map" class="map">
-          <div class="empty">No location loaded.</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="sidebar-card resources-card card">
-      <div class="cardHeader">Resources</div>
-      <div class="cardBody resources-body">
-        <div class="resources-links">
-          <a class="link" href="${CBC_RESULTS_URL}" target="_blank" rel="noopener noreferrer">Download Audubon CBC Count Results</a>
-          <a class="link" href="${CBC_MAP_URL}" target="_blank" rel="noopener noreferrer">Audubon CBC map</a>
-          <a class="link" href="${CBC_PORTAL_URL}" target="_blank" rel="noopener noreferrer">Audubon Application Portal</a>
-        </div>
-      </div>
-    </div>
-    </aside>
-
-    <main class="main">
-      <div id="countHeader" class="count-header card">
-        <div class="count-header-bar">
-          <div id="countHeaderText" class="count-header-text">Load a CSV or select existing count data</div>
-          <div class="tabs" role="tablist" aria-label="Tables">
-            <button id="tabSpecies" class="tab-button active" type="button">Species</button>
-            <button id="tabWeather" class="tab-button" type="button">Weather</button>
-            <button id="tabEffort" class="tab-button" type="button">Effort</button>
-            <button id="tabParticipation" class="tab-button" type="button">Participation</button>
-          </div>
-          <button id="exportCsvBtn" class="export-button export-button-header" type="button" disabled>Export CSV</button>
-        </div>
-      </div>
-
-      <div class="split">
-        <div class="table-pane card">
-          <div id="panelHeader" class="panel-header"></div>
-          <div id="panel" class="panel">
-            <div class="empty">Table appears here when a CSV is loaded.</div>
+                <div class="section-title">Summary</div>
+                <div id="summary" class="summary">
+                  <div class="empty">No CSV loaded.</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="plot-pane card">
-          <div id="plotHeader" class="panel-header"></div>
-          <div id="plot" class="plot">
-            <div class="empty">Plot appears here when a CSV is loaded.</div>
+        <div
+          id="gutterX"
+          class="gutter gutter-horizontal layout-gutter-x"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize columns"
+          tabindex="0"
+        ></div>
+
+        <div class="layout-cell layout-top-right">
+          <div class="layout-right-top">
+            <div id="countHeader" class="count-header card">
+              <div class="count-header-bar">
+                <div id="countHeaderText" class="count-header-text">Load a CSV or select existing count data</div>
+                <div class="tabs" role="tablist" aria-label="Tables">
+                  <button id="tabSpecies" class="tab-button active" type="button">Species</button>
+                  <button id="tabWeather" class="tab-button" type="button">Weather</button>
+                  <button id="tabEffort" class="tab-button" type="button">Effort</button>
+                  <button id="tabParticipation" class="tab-button" type="button">Participation</button>
+                </div>
+                <button id="exportCsvBtn" class="export-button export-button-header" type="button" disabled>Export CSV</button>
+              </div>
+            </div>
+
+            <div class="table-pane card">
+              <div id="panelHeader" class="panel-header"></div>
+              <div id="panel" class="panel">
+                <div class="empty">Table appears here when a CSV is loaded.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          id="gutterY"
+          class="gutter gutter-vertical layout-gutter-y"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize rows"
+          tabindex="0"
+        ></div>
+
+        <div class="layout-cell layout-bottom-left">
+          <div class="layout-stack">
+            <div class="map-card card">
+              <div class="cardBody map-body">
+                <div id="map" class="map">
+                  <div class="empty">No location loaded.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="resources-card card">
+              <div class="cardHeader">Resources</div>
+              <div class="cardBody resources-body">
+                <div class="resources-links">
+                  <a class="link" href="${CBC_RESULTS_URL}" target="_blank" rel="noopener noreferrer">Download Audubon CBC Count Results</a>
+                  <a class="link" href="${CBC_MAP_URL}" target="_blank" rel="noopener noreferrer">Audubon CBC map</a>
+                  <a class="link" href="${CBC_PORTAL_URL}" target="_blank" rel="noopener noreferrer">Audubon Application Portal</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="layout-cell layout-bottom-right">
+          <div class="plot-pane card">
+            <div id="plot" class="plot">
+              <div class="empty">Plot appears here when a CSV is loaded.</div>
+              <div class="plot-overlay-controls">
+                <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Download plot" title="Download">⤓</button>
+                <button id="plotPopoutOverlayBtn" class="popout-button" type="button" aria-label="Pop out plot" title="Pop out">⤢</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </main>
     </div>
 
     <footer class="footerbar">
@@ -223,6 +299,37 @@ app.innerHTML = `
   </div>
 `;
 
+const tablePopoutTemplate = `
+  <div class="app">
+    <div class="content-row">
+      <div class="table-pane card" style="width: 100%; height: 100%;">
+        <div id="panelHeader" class="panel-header"></div>
+        <div id="panel" class="panel">
+          <div class="empty">Waiting for data…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+`;
+
+const plotPopoutTemplate = `
+  <div class="app">
+    <div class="content-row">
+      <div class="plot-pane card" style="width: 100%; height: 100%;">
+        <div id="plot" class="plot">
+          <div class="empty">Waiting for data…</div>
+          <div class="plot-overlay-controls">
+            <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Download plot" title="Download">⤓</button>
+            <select id="plotSpeciesSelect" class="panel-select" data-action="plot-species-select"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`;
+
+app.innerHTML = IS_POPOUT_TABLE ? tablePopoutTemplate : IS_POPOUT_PLOT ? plotPopoutTemplate : mainTemplate;
+
 const dropzoneEl = document.getElementById('dropzone');
 const fileInputEl = document.getElementById('fileInput');
 const ingestedEl = document.getElementById('ingested');
@@ -235,6 +342,9 @@ const panelHeaderEl = document.getElementById('panelHeader');
 const panelEl = document.getElementById('panel');
 const plotHeaderEl = document.getElementById('plotHeader');
 const plotEl = document.getElementById('plot');
+const plotPopoutOverlayBtnEl = document.getElementById('plotPopoutOverlayBtn');
+const plotExportOverlayBtnEl = document.getElementById('plotExportOverlayBtn');
+const plotSpeciesSelectEl = document.getElementById('plotSpeciesSelect');
 
 const countSearchEl = document.getElementById('countSearch');
 const countSearchResultsEl = document.getElementById('countSearchResults');
@@ -244,48 +354,70 @@ const navCardEl = document.querySelector('.nav-card');
 const mapCardEl = document.querySelector('.map-card');
 const resourcesCardEl = document.querySelector('.resources-card');
 
-function syncSidebarHeights() {
-  if (!navCardEl || !mapCardEl) return;
-  if (!countHeaderEl) return;
-  const tablePaneEl = document.querySelector('.table-pane');
-  const sidebarEl = navCardEl.closest('.sidebar');
-  if (!tablePaneEl || !sidebarEl) return;
-
-  const headerRect = countHeaderEl.getBoundingClientRect();
-  const tableRect = tablePaneEl.getBoundingClientRect();
-  const sidebarRect = sidebarEl.getBoundingClientRect();
-
-  let navHeight = Math.round(tableRect.bottom - headerRect.top);
-  if (!Number.isFinite(navHeight) || navHeight <= 0) return;
-  navHeight += 2;
-  const GAP_PX = 14;
-  const MIN_MAP_PX = 160;
-  let resourcesHeight = 0;
-  if (resourcesCardEl) {
-    resourcesCardEl.style.flex = '0 0 auto';
-    resourcesCardEl.style.height = 'auto';
-    resourcesHeight = Math.round(resourcesCardEl.getBoundingClientRect().height);
+panelHeaderEl?.addEventListener('click', (e) => {
+  const popBtn = e.target?.closest?.('[data-action="popout-table"]');
+  if (popBtn) {
+    e.preventDefault();
+    openPopout('table');
+    return;
   }
 
-  const gaps = resourcesCardEl ? GAP_PX * 2 : GAP_PX;
-  const maxNav = Math.max(
-    200,
-    Math.floor(sidebarRect.height - gaps - resourcesHeight - MIN_MAP_PX)
-  );
-  navHeight = Math.min(navHeight, maxNav);
-  navHeight = Math.max(220, navHeight);
+  const filterBtn = e.target?.closest?.('[data-action="toggle-species-filter"]');
+  if (filterBtn) {
+    const which = filterBtn.getAttribute('data-filter');
+    if (which === 'rare') {
+      const next = !state.speciesFilterRare;
+      state.speciesFilterRare = next;
+      if (next) state.speciesFilterOwls = false;
+    } else if (which === 'owls') {
+      const next = !state.speciesFilterOwls;
+      state.speciesFilterOwls = next;
+      if (next) state.speciesFilterRare = false;
+    }
+    renderPanel(activeTab);
+  }
+});
 
-  const mapHeight = Math.max(
-    MIN_MAP_PX,
-    Math.floor(sidebarRect.height - gaps - resourcesHeight - navHeight)
-  );
+plotPopoutOverlayBtnEl?.addEventListener('click', (e) => {
+  e.preventDefault();
+  openPopout('plot');
+});
 
-  navCardEl.style.flex = '0 0 auto';
-  mapCardEl.style.flex = '0 0 auto';
-  navCardEl.style.height = `${navHeight}px`;
-  mapCardEl.style.height = `${mapHeight}px`;
+plotExportOverlayBtnEl?.addEventListener('click', (e) => {
+  e.preventDefault();
+  void downloadPngFromPlot();
+});
 
-  if (leafletMap) leafletMap.invalidateSize();
+function renderPlotSpeciesOverlay() {
+  if (!plotSpeciesSelectEl) return;
+  const rows = (state?.species || []).filter((r) => !isSpRecord(r?.Species || ''));
+  const names = rows
+    .map((r) => cleanText(r?.Species || ''))
+    .filter((s) => s)
+    .sort((a, b) => stripBracketedText(a).localeCompare(stripBracketedText(b), undefined, { sensitivity: 'base' }));
+
+  const current = cleanText(state?.selectedSpecies || '');
+  const options = ['<option value="">Select species…</option>']
+    .concat(
+      names.map((s) => {
+        const selected = s === current ? ' selected' : '';
+        return `<option value="${escapeHtml(s)}"${selected}>${escapeHtml(stripBracketedText(s))}</option>`;
+      })
+    )
+    .join('');
+  plotSpeciesSelectEl.innerHTML = options;
+}
+
+plotSpeciesSelectEl?.addEventListener('change', (e) => {
+  const sel = e.target;
+  const next = cleanText(sel.value || '');
+  if (!next) return;
+  state.selectedSpecies = next;
+  renderPlot('species');
+});
+
+function syncSidebarHeights() {
+  return;
 }
 
 L.Icon.Default.mergeOptions({
@@ -301,13 +433,139 @@ try {
 let leafletMap = null;
 let leafletMapMarker = null;
 let leafletCircle = null;
+
+const GRID_COL_KEY = 'cbc-historic.grid.leftPx.v1';
+const GRID_ROW_KEY = 'cbc-historic.grid.topPx.v1';
+
+let _layoutResizeQueued = false;
+function requestLayoutResize() {
+  if (_layoutResizeQueued) return;
+  _layoutResizeQueued = true;
+  requestAnimationFrame(() => {
+    _layoutResizeQueued = false;
+    try {
+      schedulePlotResize();
+    } catch {
+    }
+    try {
+      if (leafletMap) leafletMap.invalidateSize();
+    } catch {
+    }
+  });
+}
+
+function readStoredPx(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPx(key, value) {
+  try {
+    localStorage.setItem(key, String(Math.round(value)));
+  } catch {
+  }
+}
+
+function initGridSplit() {
+  const layoutEl = document.getElementById('layoutGrid');
+  const gutterX = document.getElementById('gutterX');
+  const gutterY = document.getElementById('gutterY');
+  if (!layoutEl || !gutterX || !gutterY) return;
+
+  const GUTTER_PX = 8;
+  const MIN_LEFT_PX = 280;
+  const MIN_RIGHT_PX = 520;
+  const MIN_TOP_PX = 260;
+  const MIN_BOTTOM_PX = 220;
+
+  function clampAndApply(nextLeftPx, nextTopPx) {
+    const rect = layoutEl.getBoundingClientRect();
+    const maxLeft = Math.max(MIN_LEFT_PX, rect.width - GUTTER_PX - MIN_RIGHT_PX);
+    const maxTop = Math.max(MIN_TOP_PX, rect.height - GUTTER_PX - MIN_BOTTOM_PX);
+
+    const leftPx = Math.min(Math.max(nextLeftPx, MIN_LEFT_PX), maxLeft);
+    const topPx = Math.min(Math.max(nextTopPx, MIN_TOP_PX), maxTop);
+
+    layoutEl.style.setProperty('--layout-gutter', `${GUTTER_PX}px`);
+    layoutEl.style.setProperty('--left-w', `${Math.round(leftPx)}px`);
+    layoutEl.style.setProperty('--top-h', `${Math.round(topPx)}px`);
+    return { leftPx, topPx };
+  }
+
+  const rect = layoutEl.getBoundingClientRect();
+  const defaultLeft = Math.round(rect.width * 0.32);
+  const defaultTop = Math.round(rect.height * 0.62);
+  let leftPx = readStoredPx(GRID_COL_KEY) ?? defaultLeft;
+  let topPx = readStoredPx(GRID_ROW_KEY) ?? defaultTop;
+
+  ({ leftPx, topPx } = clampAndApply(leftPx, topPx));
+  requestLayoutResize();
+
+  function startDrag(axis, ev) {
+    ev.preventDefault();
+    const startX = ev.clientX;
+    const startY = ev.clientY;
+    const startLeft = leftPx;
+    const startTop = topPx;
+    document.body.classList.add('resizing');
+
+    const target = axis === 'x' ? gutterX : gutterY;
+    try {
+      target.setPointerCapture(ev.pointerId);
+    } catch {
+    }
+
+    function onMove(e) {
+      if (axis === 'x') {
+        const next = startLeft + (e.clientX - startX);
+        ({ leftPx, topPx } = clampAndApply(next, topPx));
+      } else {
+        const next = startTop + (e.clientY - startY);
+        ({ leftPx, topPx } = clampAndApply(leftPx, next));
+      }
+      requestLayoutResize();
+    }
+
+    function onEnd(e) {
+      document.body.classList.remove('resizing');
+      try {
+        target.releasePointerCapture(e.pointerId);
+      } catch {
+      }
+      writeStoredPx(GRID_COL_KEY, leftPx);
+      writeStoredPx(GRID_ROW_KEY, topPx);
+      target.removeEventListener('pointermove', onMove);
+      target.removeEventListener('pointerup', onEnd);
+      target.removeEventListener('pointercancel', onEnd);
+      requestLayoutResize();
+    }
+
+    target.addEventListener('pointermove', onMove);
+    target.addEventListener('pointerup', onEnd);
+    target.addEventListener('pointercancel', onEnd);
+  }
+
+  gutterX.addEventListener('pointerdown', (e) => startDrag('x', e));
+  gutterY.addEventListener('pointerdown', (e) => startDrag('y', e));
+
+  window.addEventListener('resize', () => {
+    ({ leftPx, topPx } = clampAndApply(leftPx, topPx));
+    requestLayoutResize();
+  });
+}
 let _sidebarSyncQueued = false;
 function requestSidebarSync() {
   if (_sidebarSyncQueued) return;
   _sidebarSyncQueued = true;
   requestAnimationFrame(() => {
     _sidebarSyncQueued = false;
-    syncSidebarHeights();
+    requestLayoutResize();
   });
 }
 
@@ -326,6 +584,16 @@ function ensureLeafletMap() {
     attribution: '&copy; OpenStreetMap contributors',
   }).addTo(leafletMap);
 
+  try {
+    setTimeout(() => {
+      try {
+        leafletMap?.invalidateSize();
+      } catch {
+      }
+    }, 0);
+  } catch {
+  }
+
   requestSidebarSync();
   return leafletMap;
 }
@@ -333,11 +601,39 @@ function ensureLeafletMap() {
 try {
   const tablePaneEl = document.querySelector('.table-pane');
   if (tablePaneEl && window.ResizeObserver) {
-    const ro = new ResizeObserver(() => requestSidebarSync());
+    const ro = new ResizeObserver(() => requestLayoutResize());
     ro.observe(tablePaneEl);
   }
 } catch {
 }
+
+try {
+  const plotPaneEl = document.querySelector('.plot-pane');
+  if (plotPaneEl && window.ResizeObserver) {
+    const ro = new ResizeObserver(() => requestLayoutResize());
+    ro.observe(plotPaneEl);
+  }
+} catch {
+}
+
+try {
+  if (plotEl && window.ResizeObserver) {
+    const ro = new ResizeObserver(() => schedulePlotResize());
+    ro.observe(plotEl);
+  }
+} catch {
+}
+
+try {
+  const mapCard = document.querySelector('.map-card');
+  if (mapCard && window.ResizeObserver) {
+    const ro = new ResizeObserver(() => requestLayoutResize());
+    ro.observe(mapCard);
+  }
+} catch {
+}
+
+initGridSplit();
 
 function updateMapFromState() {
   if (!mapEl) return;
@@ -346,11 +642,10 @@ function updateMapFromState() {
   const lon = typeof ci.Lon === 'number' ? ci.Lon : parseFloat(String(ci.Lon ?? '').trim());
   const has = Number.isFinite(lat) && Number.isFinite(lon);
 
+  const map = ensureLeafletMap();
+  if (!map) return;
+
   if (!has) {
-    if (!leafletMap) {
-      mapEl.innerHTML = '<div class="empty">No location loaded.</div>';
-      return;
-    }
     if (leafletMapMarker) {
       leafletMapMarker.remove();
       leafletMapMarker = null;
@@ -359,11 +654,16 @@ function updateMapFromState() {
       leafletCircle.remove();
       leafletCircle = null;
     }
+    try {
+      map.setView([37.5, -120.5], 6);
+    } catch {
+    }
+    try {
+      map.invalidateSize();
+    } catch {
+    }
     return;
   }
-
-  const map = ensureLeafletMap();
-  if (!map) return;
 
   const center = [lat, lon];
   if (!leafletMapMarker) leafletMapMarker = L.marker(center).addTo(map);
@@ -387,6 +687,11 @@ function updateMapFromState() {
     map.fitBounds(leafletCircle.getBounds(), { padding: [18, 18] });
   } catch {
     map.setView(center, 10);
+  }
+
+  try {
+    map.invalidateSize();
+  } catch {
   }
 }
 
@@ -933,10 +1238,13 @@ const AXIS_STYLE_BASE = {
 };
 
 function setPlotHeader({ title } = {}) {
-  if (!plotHeaderEl) return;
   currentPlotTitle = title || null;
   applyHeaderTheme();
-  plotHeaderEl.innerHTML = title ? `<div class="panel-title">${escapeHtml(String(title))}</div>` : '';
+  try {
+    if (plotHeaderEl) plotHeaderEl.innerHTML = '';
+  } catch {
+  }
+  renderPlotSpeciesOverlay();
 }
 
 const tabs = {
@@ -981,6 +1289,13 @@ function schedulePlotResize() {
     const P = plotlyRef;
     if (!P) return;
     try {
+      const { width, height } = currentPlotSize();
+      if (width && height) {
+        try {
+          P.relayout(plotEl, { width, height });
+        } catch {
+        }
+      }
       P.Plots.resize(plotEl);
     } catch {
     }
@@ -1014,7 +1329,7 @@ function currentPlotSize() {
 async function setActiveTab(name) {
   activeTab = name;
   for (const [k, el] of Object.entries(tabs)) {
-    el.classList.toggle('active', k === name);
+    if (el) el.classList.toggle('active', k === name);
   }
   applyHeaderTheme();
   renderPanel(name);
@@ -1023,9 +1338,84 @@ async function setActiveTab(name) {
 }
 
 for (const [k, el] of Object.entries(tabs)) {
+  if (!el) continue;
   el.addEventListener('click', () => {
     setActiveTab(k);
   });
+}
+
+function getPopoutSnapshot() {
+  return {
+    activeTab,
+    state: safeClone(state),
+  };
+}
+
+function openPopout(mode) {
+  const id = makePopoutId();
+  const url = buildPopoutUrl(mode, id);
+  const win = window.open(url, `cbc-historic-${mode}-${id}`, 'popup,width=1200,height=800');
+  pendingPopouts.set(id, { mode, win });
+  try {
+    popoutChannel?.postMessage({ type: 'snapshot', popoutId: id, mode, snapshot: getPopoutSnapshot() });
+  } catch {
+  }
+  setTimeout(() => {
+    try {
+      popoutChannel?.postMessage({ type: 'snapshot', popoutId: id, mode, snapshot: getPopoutSnapshot() });
+    } catch {
+    }
+  }, 300);
+}
+
+popoutChannel?.addEventListener('message', (ev) => {
+  const msg = ev?.data;
+  if (!msg || typeof msg !== 'object') return;
+
+  if (!IS_POPOUT && msg.type === 'ready') {
+    const id = msg.popoutId;
+    const pending = pendingPopouts.get(id);
+    if (!pending) return;
+    try {
+      popoutChannel?.postMessage({ type: 'snapshot', popoutId: id, mode: pending.mode, snapshot: getPopoutSnapshot() });
+    } catch {
+    }
+    return;
+  }
+
+  if (IS_POPOUT && msg.type === 'snapshot') {
+    if (!POPOUT_ID || msg.popoutId !== POPOUT_ID) return;
+    const snap = msg.snapshot;
+    if (!snap || typeof snap !== 'object') return;
+    if (snap.state && typeof snap.state === 'object') {
+      state = { ...state, ...snap.state };
+    }
+    if (snap.activeTab) {
+      activeTab = snap.activeTab;
+    }
+
+    if (IS_POPOUT_TABLE) {
+      renderCountHeader();
+      renderSummary();
+      renderPanel(activeTab);
+      return;
+    }
+
+    if (IS_POPOUT_PLOT) {
+      renderCountHeader();
+      renderSummary();
+      renderPlotSpeciesOverlay();
+      renderPlot('species');
+      return;
+    }
+  }
+});
+
+if (IS_POPOUT && POPOUT_ID) {
+  try {
+    popoutChannel?.postMessage({ type: 'ready', popoutId: POPOUT_ID, mode: POPOUT_MODE });
+  } catch {
+  }
 }
 
 function escapeHtml(s) {
@@ -1305,6 +1695,11 @@ function renderTable(rows, columns, opts = {}) {
   const thead = cols.map((c) => `<th class="${colClass(c)}">${escapeHtml(c)}</th>`).join('');
   const tbody = rows
     .map((r) => {
+      const isSelected =
+        opts.selectedSpecies &&
+        opts.clickSpecies &&
+        cleanText(r?.Species || '') &&
+        String(r.Species) === String(opts.selectedSpecies);
       const tds = cols
         .map((c) => {
           const v = r[c];
@@ -1329,7 +1724,7 @@ function renderTable(rows, columns, opts = {}) {
           return `<td class="${colClass(c)}">${escapeHtml(v === null || v === undefined ? '' : String(v))}</td>`;
         })
         .join('');
-      return `<tr>${tds}</tr>`;
+      return `<tr class="${isSelected ? 'is-selected' : ''}">${tds}</tr>`;
     })
     .join('');
 
@@ -1353,16 +1748,26 @@ function renderPanel(active) {
   }
 
   const cfg = getTableConfig(active);
+  const actions = [];
   if (active === 'species') {
-    panelHeaderEl.innerHTML = '';
-  } else {
-    panelHeaderEl.innerHTML = `
-      <div class="panel-title">
-        ${escapeHtml(cfg.title)}
-        <span class="panel-sub">${escapeHtml(cfg.range)}</span>
-      </div>
-    `;
+    actions.push(
+      `<button type="button" class="tab-button${state.speciesFilterRare ? ' active' : ''}" data-action="toggle-species-filter" data-filter="rare">Rare</button>`,
+      `<button type="button" class="tab-button${state.speciesFilterOwls ? ' active' : ''}" data-action="toggle-species-filter" data-filter="owls">Owls</button>`
+    );
   }
+  if (!IS_POPOUT_TABLE) {
+    actions.push(
+      `<button class="popout-button" type="button" data-action="popout-table" aria-label="Pop out table" title="Pop out">⤢</button>`
+    );
+  }
+  const titleHtml = `
+    <div class="panel-title">
+      ${escapeHtml(cfg.title)}
+      <span class="panel-sub">${escapeHtml(cfg.range)}</span>
+    </div>
+  `;
+  const actionsHtml = actions.length ? `<div class="panel-actions">${actions.join('')}</div>` : '';
+  panelHeaderEl.innerHTML = `${titleHtml}${actionsHtml}`;
 
   if (active === 'species') {
     const years = state.yearsFull || state.years || [];
@@ -1383,20 +1788,12 @@ function renderPanel(active) {
       });
     }
 
-    const filterBar = `
-      <div class="species-filter-bar" role="group" aria-label="Species filters">
-        <button type="button" class="tab-button${state.speciesFilterRare ? ' active' : ''}" data-action="toggle-species-filter" data-filter="rare">Rare</button>
-        <button type="button" class="tab-button${state.speciesFilterOwls ? ' active' : ''}" data-action="toggle-species-filter" data-filter="owls">Owls</button>
-      </div>
-    `;
-
-    panelEl.innerHTML =
-      filterBar +
-      renderTable(rows, ['Species', ...years.map(String)], {
-        clickSpecies: true,
-        ndForMissingYears: true,
-        missingYearsSet,
-      });
+    panelEl.innerHTML = renderTable(rows, ['Species', ...years.map(String)], {
+      clickSpecies: true,
+      ndForMissingYears: true,
+      missingYearsSet,
+      selectedSpecies: state.selectedSpecies,
+    });
     return;
   }
 
@@ -1678,7 +2075,7 @@ async function renderPlot(active) {
     });
     const fullTitle = `${withCbcSuffix(countDisplayName())} - ${normalizeRangeForTitle(
       state.ranges?.speciesYears || yearRangeStr(years)
-    )} - ${stripBracketedText(state.selectedSpecies)}`;
+    )}${IS_POPOUT_PLOT ? '' : ` - ${stripBracketedText(state.selectedSpecies)}`}`;
     await plotLollipop({ x, y, title: fullTitle, markerColors });
     return;
   }
@@ -1808,12 +2205,7 @@ async function downloadPngFromPlot() {
     });
 }
 
-plotHeaderEl?.addEventListener('click', (e) => {
-  const btn = e.target?.closest?.('[data-action="export-plot"]');
-  if (!btn) return;
-  if (btn.hasAttribute('disabled')) return;
-  void downloadPngFromPlot();
-});
+
 
 async function parseUploadedFile(file) {
   const name = String(file?.name || '').toLowerCase();
@@ -1946,27 +2338,12 @@ exportCsvBtnEl?.addEventListener('click', () => {
 });
 
 panelEl?.addEventListener('click', (e) => {
-  const filterBtn = e.target?.closest?.('[data-action="toggle-species-filter"]');
-  if (filterBtn) {
-    const which = filterBtn.getAttribute('data-filter');
-    if (which === 'rare') {
-      const next = !state.speciesFilterRare;
-      state.speciesFilterRare = next;
-      if (next) state.speciesFilterOwls = false;
-    } else if (which === 'owls') {
-      const next = !state.speciesFilterOwls;
-      state.speciesFilterOwls = next;
-      if (next) state.speciesFilterRare = false;
-    }
-    renderPanel(activeTab);
-    return;
-  }
-
   const cell = e.target?.closest?.('[data-action="plot-species"]');
   if (!cell) return;
   const sp = cell.getAttribute('data-species');
   if (!sp) return;
   state.selectedSpecies = sp;
+  renderPanel('species');
   renderPlot('species');
 });
 

@@ -1,10 +1,5 @@
 # CBC Historic
 
-[![language](https://img.shields.io/github/languages/top/hydrospheric0/cbc-historic?label=language)](https://github.com/hydrospheric0/cbc-historic)
-[![languages](https://img.shields.io/github/languages/count/hydrospheric0/cbc-historic?label=languages)](https://github.com/hydrospheric0/cbc-historic)
-
-![Top languages](https://github-readme-stats.vercel.app/api/top-langs/?username=hydrospheric0&repo=cbc-historic&layout=compact)
-
 ## About the Christmas Bird Count
 The Christmas Bird Count is the nation’s longest-running community science bird project. It occurs December 14 to January 5 every season in over 3000 count circles. More information can be found on the [Audubon website](https://www.audubon.org/community-science/christmas-bird-count).
 
@@ -42,6 +37,7 @@ npm run dev
 ```
 
 ### Support this project
+If you find this tool useful, please consider supporting its development:
 
 <a href="https://buymeacoffee.com/bartg">
 	<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="180" />
