@@ -5,58 +5,27 @@ The Christmas Bird Count is the nation’s longest-running community science bir
 
 ## About the tool
 This tool was developed to help count circle compilers and other interested parties by:
-- Parsing the Audubon CBC “Historical Results By Count” CSV export into clean tables
-- Providing quick visualization of historical count data
+- Fetching Audubon CBC “Historical Results By Count” data on demand (per circle)
+- Parsing it into clean tables and plots directly in the browser
+- Persisting a local, offline-ready cache in IndexedDB/sql.js
 - Allowing export of normalized CSV tables
 
 The app is hosted at: https://hydrospheric0.github.io/cbc-historic/
 
 ## Features
-- Upload / drag-and-drop Audubon CBC “Historical Results By Count” CSV
-- Count search (name/code) with links to download the correct export
-- Map view (Esri Topo default with layer selection)
+- Map with all circles; click a circle to load data
+- On-demand CSV fetch via Cloudflare Worker proxy + local caching
+- Search by circle name/code
 - Tabbed tables (Species / Weather / Effort / Participation)
 - Plot pane for quick trend visualization
+- Export normalized CSV tables
 
 ## How to use
-You can either:
-- Download the “Historical Results By Count” CSV for your count circle from the Audubon portal, then drop it into the app, or
-- (Optional) Configure the Cloudflare Worker proxy and use the in-app update/download buttons to fetch and ingest a circle directly.
+1. Click a circle on the map (or search by name/code).
+2. The app downloads that circle’s data via the proxy and stores it locally.
+3. Tables and plots populate automatically; you can export normalized CSV tables.
+4. Use the ↻ Update button in Available data to refresh a circle.
 
-Once ingested, tables and plots populate automatically, and you can export normalized CSV tables.
-
-## Optional: Cloudflare Worker CSV proxy
-This repo includes a minimal Worker in [cloudflare-worker/README.md](cloudflare-worker/README.md) that:
-- Proxies a single circle’s Audubon CSV export
-- Adds CORS so the GitHub Pages frontend can fetch it
-- Caches responses at the edge
-
-Frontend configuration:
-- Set `VITE_CBC_WORKER_BASE` to your Worker base URL (no trailing slash)
-
-Example:
-- `VITE_CBC_WORKER_BASE=https://cbc-historic-cbc-proxy.example.workers.dev`
-
-## GitHub Pages
-This repo is configured to deploy to GitHub Pages via Actions.
-
-- Workflow: `.github/workflows/deploy-pages.yml`
-- Vite `base` is set for project pages at `https://hydrospheric0.github.io/cbc-historic/`
-
-In GitHub repo settings, ensure **Pages** is set to **GitHub Actions** as the source.
-
-### Enable on-demand circle fetch on GitHub Pages
-Because GitHub Pages serves a static build, the Worker base URL must be provided at build time.
-
-1. Deploy the Worker (see [cloudflare-worker/README.md](cloudflare-worker/README.md)) and copy its base URL.
-2. In your GitHub repo settings, add one of:
-	- **Settings → Secrets and variables → Actions → Variables**: `VITE_CBC_WORKER_BASE`, or
-	- **Settings → Secrets and variables → Actions → Secrets**: `VITE_CBC_WORKER_BASE`
-
-Example value (no trailing slash):
-- `https://cbc-historic-cbc-proxy.example.workers.dev`
-
-The workflow [ .github/workflows/deploy-pages.yml ](.github/workflows/deploy-pages.yml) injects this into `npm run build`.
 
 ## Run locally
 

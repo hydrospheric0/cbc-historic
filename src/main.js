@@ -322,9 +322,7 @@ const mainTemplate = `
                   <div id="countSearchResults" class="count-search-results" aria-label="Search results"></div>
                 </div>
 
-                <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
-
-                <div class="section-title">Imported data</div>
+                <div class="section-title">Available data</div>
                 <div id="ingested" class="summary">
                   <div class="empty">None yet.</div>
                 </div>
@@ -391,13 +389,15 @@ const mainTemplate = `
 
         <div class="layout-cell layout-bottom-right">
           <div class="plot-pane card">
+            <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
             <div id="plot" class="plot">
-              <div class="empty">Click on species above to view</div>
+              <div class="empty">Click on a species above to plot</div>
               <div class="plot-overlay-controls">
                 <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
                 <button id="plotPopoutOverlayBtn" class="popout-button" type="button" aria-label="Pop out plot" title="Pop out">⤢</button>
               </div>
             </div>
+            <div id="plotCircleHint" class="plot-circle-hint">Click on a circle to view/download data</div>
           </div>
         </div>
       </div>
@@ -426,15 +426,15 @@ const mainTemplate = `
           <p style="margin-top: 10px; font-weight: 700;">This tool was developed to help count circle compilers and other interested parties by:</p>
           <ul>
             <li>
-              Facilitating the extraction of historical data from Audubon CBC historical files available from
-              <a href="${CBC_RESULTS_URL}" target="_blank" rel="noopener noreferrer">CBC count results</a>
+              Fetching historical data per circle from the Audubon CBC historical results
             </li>
             <li>Allow quick visualization of historical count data</li>
+            <li>Saving a local cache for faster repeat visits</li>
           </ul>
 
           <p style="margin-top: 12px; font-weight: 800;">How to use</p>
           <p>
-            Drag and drop or select upload button to add a CSV file from the Audubon CBC portal. Once ingested the information will be visible and downloadable in a generic text format.
+            Click a circle on the map (or search by name/code) to load data. The app downloads that circle’s data, stores it locally in your browser, and fills the tables and plot. Use the ↻ Update button in Available data to refresh a circle.
           </p>
           <p style="margin-top: 12px; font-weight: 700;">If you find this tool useful, please consider supporting its development:</p>
           <div class="sponsorBlock">
@@ -470,9 +470,8 @@ const plotPopoutTemplate = `
     <div class="content-row">
       <div class="plot-pane card" style="width: 100%; height: 100%;">
         <div id="plot" class="plot">
-          <div class="empty">Click on species above to view</div>
+          <div class="empty">Click on a species above to plot</div>
           <div class="plot-overlay-controls">
-            <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
             <select id="plotSpeciesSelect" class="panel-select" data-action="plot-species-select"></select>
           </div>
         </div>
@@ -498,6 +497,7 @@ const plotEl = document.getElementById('plot');
 const plotPopoutOverlayBtnEl = document.getElementById('plotPopoutOverlayBtn');
 const plotExportOverlayBtnEl = document.getElementById('plotExportOverlayBtn');
 const plotSpeciesSelectEl = document.getElementById('plotSpeciesSelect');
+const plotCircleHintEl = document.getElementById('plotCircleHint');
 
 let plotMountEl = null;
 let plotEmptyEl = null;
@@ -972,7 +972,7 @@ function updateMapFromState() {
     }
     if (!activeCode) {
       try {
-        map.setView([37.5, -120.5], 6);
+        map.setView([37.5, -120.5], 4);
       } catch {
       }
     }
@@ -1059,7 +1059,7 @@ function setSelectedCircle(next, { fetchIfMissing = false } = {}) {
     clearLoadedCsvData();
     panelEl.innerHTML = '<div class="empty">Downloading circle data…</div>';
     summaryEl.innerHTML = '<div class="empty">Downloading…</div>';
-    clearPlot('Click on species above to view');
+    clearPlot('Click on a species above to plot');
 
     (async () => {
       const name = selectedCircle?.Name || '';
@@ -1109,7 +1109,7 @@ function clearLoadedCsvData() {
     renderPanel(activeTab);
   } catch {
   }
-  clearPlot('Click on species above to view');
+  clearPlot('Click on a species above to plot');
 }
 
 function setStoredCountCodesFromIndex(index) {
@@ -2313,7 +2313,6 @@ function renderSummary() {
   const missingYearsText = missingYears.length ? missingYears.join(', ') : 'None';
 
   const rows = [
-    ['File', state.filename || '—'],
     ['Count Name', ci.CountName || '—'],
     ['Count Code', ci.CountCode || '—'],
     ['Location', loc],
@@ -2342,6 +2341,10 @@ function renderSummary() {
 
 function renderCountHeader() {
   if (!countHeaderTextEl) return;
+  if (plotCircleHintEl) {
+    const hasCircle = !!cleanText(selectedCircle?.Abbrev || '');
+    plotCircleHintEl.classList.toggle('hidden', hasCircle || !!state?.species);
+  }
   if (!state.species) {
     const selCode = cleanText(selectedCircle?.Abbrev || '');
     if (selectedCircle && selCode) {
@@ -2755,13 +2758,13 @@ async function plotLollipop({ x, y, title, markerColors = null }) {
 
 async function renderPlot(active) {
   if (!state.species) {
-    clearPlot('Click on species above to view');
+    clearPlot('Click on a species above to plot');
     return;
   }
 
   if (active === 'species') {
     if (!state.selectedSpecies) {
-      clearPlot('Click on species above to view');
+      clearPlot('Click on a species above to plot');
       return;
     }
     if (isSpRecord(state.selectedSpecies)) {
@@ -3107,7 +3110,7 @@ ingestedEl?.addEventListener('click', async (e) => {
         renderSummary();
         panelHeaderEl.innerHTML = '';
         panelEl.innerHTML = '<div class="empty">Table appears here when a CSV is loaded.</div>';
-        clearPlot('Click on species above to view');
+        clearPlot('Click on a species above to plot');
       }
     })().catch((err) => {
       const msg = err?.message || String(err);

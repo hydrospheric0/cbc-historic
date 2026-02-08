@@ -513,15 +513,16 @@ h6 {
 }
 
 #countHeader .tabs {
-  justify-content: flex-start;
+  justify-content: flex-end;
   flex: 0 0 auto;
-  order: 1;
+  order: 2;
+  margin-left: auto;
 }
 
 #countHeaderText {
   flex: 1 1 auto;
   min-width: 0;
-  order: 2;
+  order: 1;
 }
 
 .download-indicator {
@@ -705,6 +706,14 @@ h6 {
   position: relative;
 }
 
+.plot-circle-hint {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #555;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.6);
+}
+
 .panel-header {
   display: flex;
   align-items: baseline;
@@ -774,6 +783,15 @@ body:not(.is-popout-plot) .plot-pane > .panel-header {
   pointer-events: auto;
 }
 
+body.is-popout-plot .plot-overlay-controls {
+  right: auto;
+  left: 12px;
+}
+
+body.is-popout-plot #plotExportOverlayBtn {
+  display: none;
+}
+
 body:not(.is-popout-plot) #plotSpeciesSelect {
   display: none;
 }
@@ -836,6 +854,40 @@ body.is-popout-plot #plotPopoutOverlayBtn {
   box-sizing: border-box;
   padding: 16px;
   position: relative;
+}
+
+.plot > .empty,
+.plot [data-role="plot-empty"] {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+body:not(.is-popout) .plot > .empty::after,
+body:not(.is-popout) .plot [data-role="plot-empty"]::after {
+  content: '↑';
+  display: block;
+  margin-top: 8px;
+  font-size: 18px;
+  line-height: 1;
+  color: #b91c1c;
+  animation: cbc-arrow-bounce 0.9s ease-in-out infinite;
+}
+
+@keyframes cbc-arrow-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 .plot-mount {
