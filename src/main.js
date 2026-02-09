@@ -390,12 +390,15 @@ const mainTemplate = `
         <div class="layout-cell layout-bottom-right">
           <div class="plot-pane card">
             <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
-            <div id="plot" class="plot">
-              <div class="empty">Click on a species above to plot</div>
+            <div class="plot-bar">
+              <div class="plot-bar-spacer"></div>
               <div class="plot-overlay-controls">
                 <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
                 <button id="plotPopoutOverlayBtn" class="popout-button" type="button" aria-label="Pop out plot" title="Pop out">⤢</button>
               </div>
+            </div>
+            <div id="plot" class="plot">
+              <div class="empty">Click on a species above to plot</div>
             </div>
             <div id="plotCircleHint" class="plot-circle-hint">Click on a circle to view/download data</div>
           </div>
@@ -469,11 +472,14 @@ const plotPopoutTemplate = `
   <div class="app">
     <div class="content-row">
       <div class="plot-pane card" style="width: 100%; height: 100%;">
-        <div id="plot" class="plot">
-          <div class="empty">Click on a species above to plot</div>
+        <div class="plot-bar">
+          <div class="plot-bar-spacer"></div>
           <div class="plot-overlay-controls">
             <select id="plotSpeciesSelect" class="panel-select" data-action="plot-species-select"></select>
           </div>
+        </div>
+        <div id="plot" class="plot">
+          <div class="empty">Click on a species above to plot</div>
         </div>
       </div>
     </div>
