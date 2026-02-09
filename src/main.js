@@ -391,11 +391,12 @@ const mainTemplate = `
           <div class="plot-pane card">
             <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
             <div class="plot-bar">
-              <div class="plot-bar-spacer"></div>
               <div class="plot-overlay-controls">
+                <select id="plotSpeciesSelect" class="panel-select" data-action="plot-species-select"></select>
                 <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
                 <button id="plotPopoutOverlayBtn" class="popout-button" type="button" aria-label="Pop out plot" title="Pop out">⤢</button>
               </div>
+              <div class="plot-bar-spacer"></div>
             </div>
             <div id="plot" class="plot">
               <div class="empty">Click on a species above to plot</div>
@@ -473,10 +474,10 @@ const plotPopoutTemplate = `
     <div class="content-row">
       <div class="plot-pane card" style="width: 100%; height: 100%;">
         <div class="plot-bar">
-          <div class="plot-bar-spacer"></div>
           <div class="plot-overlay-controls">
             <select id="plotSpeciesSelect" class="panel-select" data-action="plot-species-select"></select>
           </div>
+          <div class="plot-bar-spacer"></div>
         </div>
         <div id="plot" class="plot">
           <div class="empty">Click on a species above to plot</div>
@@ -596,7 +597,7 @@ plotSpeciesSelectEl?.addEventListener('change', (e) => {
   const next = cleanText(sel.value || '');
   if (!next) return;
   state.selectedSpecies = next;
-  renderPlot('species');
+  setActiveTab('species');
 });
 
 function syncSidebarHeights() {
@@ -1655,7 +1656,7 @@ function renderIngestedCountsList(index) {
     cell.className = 'update-cell';
     const meta = document.createElement('span');
     meta.className = 'update-meta';
-    meta.textContent = 'Not available locally';
+    meta.textContent = 'Click to update';
     cell.appendChild(meta);
 
     const btnUp = document.createElement('button');
