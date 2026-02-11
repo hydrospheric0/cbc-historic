@@ -28,24 +28,6 @@ The app is hosted at: https://hydrospheric0.github.io/cbc-historic/
 3. Tables and plots populate automatically; you can export normalized CSV tables.
 4. Use the ↻ Update button in Available data to refresh a circle.
 
-
-## Run locally
-
-```bash
-npm install
-npm run dev
-```
-
-If you want to use the Worker locally:
-
-```bash
-npm --prefix cloudflare-worker install
-npm --prefix cloudflare-worker run dev
-```
-
-Then run the frontend with:
-- `VITE_CBC_WORKER_BASE=http://127.0.0.1:8787`
-
 ### Support this project
 If you find this tool useful, please consider supporting its development:
 
