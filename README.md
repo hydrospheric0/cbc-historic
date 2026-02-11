@@ -15,7 +15,7 @@ This tool was developed to help count circle compilers and other interested part
 The app is hosted at: https://hydrospheric0.github.io/cbc-historic/
 
 ## Features
-- Map with all circles; click a circle to load data
+- Map with all circles: click a circle to load data
 - On-demand CSV fetch via Cloudflare Worker proxy + local caching
 - Search by circle name/code
 - Tabbed tables (Species / Weather / Effort / Participation)
