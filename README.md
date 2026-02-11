@@ -1,7 +1,9 @@
 # CBC Historic
 
 ## About the Christmas Bird Count
-The Christmas Bird Count is the nation’s longest-running community science bird project. It occurs December 14 to January 5 every season in over 3000 count circles. More information can be found on the [Audubon website](https://www.audubon.org/community-science/christmas-bird-count).
+The Christmas Bird Count is the nation’s longest-running community science bird project. 
+It occurs December 14 to January 5 every season in over 3000 count circles. 
+More information can be found on the [Audubon website](https://www.audubon.org/community-science/christmas-bird-count).
 
 ## About the tool
 This tool was developed to help count circle compilers and other interested parties by:
