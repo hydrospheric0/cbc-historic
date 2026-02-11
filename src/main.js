@@ -2454,29 +2454,35 @@ function renderPanel(active) {
   }
 
   const cfg = getTableConfig(active);
-  const actions = [];
+  const rightActions = [];
 
-  actions.push(
+  rightActions.push(
     `<button class="popout-button" type="button" data-action="export-table" aria-label="Download table" title="Download">⤓</button>`
   );
-  if (active === 'species') {
-    actions.push(
-      `<button type="button" class="tab-button${state.speciesFilterRare ? ' active' : ''}" data-action="toggle-species-filter" data-filter="rare">Rare</button>`,
-      `<button type="button" class="tab-button${state.speciesFilterOwls ? ' active' : ''}" data-action="toggle-species-filter" data-filter="owls">Owls</button>`
-    );
-  }
+
   if (!IS_POPOUT_TABLE) {
-    actions.push(
+    rightActions.push(
       `<button class="popout-button" type="button" data-action="popout-table" aria-label="Pop out table" title="Pop out">⤢</button>`
     );
   }
-  const titleHtml = `
+
+  let leftContent = '';
+  if (active === 'species') {
+     const leftButtons = [
+      `<button type="button" class="tab-button${state.speciesFilterRare ? ' active' : ''}" data-action="toggle-species-filter" data-filter="rare">Rare</button>`,
+      `<button type="button" class="tab-button${state.speciesFilterOwls ? ' active' : ''}" data-action="toggle-species-filter" data-filter="owls">Owls</button>`
+     ];
+     leftContent = `<div class="panel-actions">${leftButtons.join('')}</div>`;
+  } else {
+     leftContent = `
     <div class="panel-title">
       ${escapeHtml(cfg.title)}
     </div>
   `;
-  const actionsHtml = actions.length ? `<div class="panel-actions">${actions.join('')}</div>` : '';
-  panelHeaderEl.innerHTML = `${titleHtml}${actionsHtml}`;
+  }
+
+  const actionsHtml = rightActions.length ? `<div class="panel-actions">${rightActions.join('')}</div>` : '';
+  panelHeaderEl.innerHTML = `${leftContent}${actionsHtml}`;
 
   if (active === 'species') {
     const years = state.yearsFull || state.years || [];
