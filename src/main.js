@@ -389,7 +389,6 @@ const mainTemplate = `
 
         <div class="layout-cell layout-bottom-right">
           <div class="plot-pane card">
-            <div id="countSearchSelected" class="count-search-selected hidden" aria-label="Selected count"></div>
             <div class="plot-bar">
               <div class="plot-overlay-controls">
                 <select id="plotSpeciesSelect" class="panel-select" data-action="plot-species-select"></select>
@@ -439,6 +438,9 @@ const mainTemplate = `
           <p style="margin-top: 12px; font-weight: 800;">How to use</p>
           <p>
             Click a circle on the map (or search by name/code) to load data. The app downloads that circle’s data, stores it locally in your browser, and fills the tables and plot. Use the ↻ Update button in Available data to refresh a circle.
+          </p>
+          <p style="margin-top: 12px; font-weight: 800;">
+            <a href="https://github.com/hydrospheric0/cbc-historic/" target="_blank" rel="noreferrer">View the source code on GitHub</a>
           </p>
           <p style="margin-top: 12px; font-weight: 700;">If you find this tool useful, please consider supporting its development:</p>
           <div class="sponsorBlock">

@@ -789,6 +789,7 @@ body:not(.is-popout-plot) .plot-pane > .panel-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 
 body.is-popout-plot #plotExportOverlayBtn {
@@ -796,6 +797,10 @@ body.is-popout-plot #plotExportOverlayBtn {
 }
 
 body.is-popout-plot #plotPopoutOverlayBtn {
+  display: none;
+}
+
+body.is-popout-plot .plot-bar-spacer {
   display: none;
 }
 
