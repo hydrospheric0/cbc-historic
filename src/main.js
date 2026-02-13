@@ -408,6 +408,7 @@ const mainTemplate = `
     </div>
 
     <footer class="footerbar">
+      <span class="footerCopyright">(C) Bart Wickel, 2026</span>
       <a class="footerLink" href="https://buymeacoffee.com/bartg" target="_blank" rel="noopener noreferrer">
         <img
           class="bmcButton"
