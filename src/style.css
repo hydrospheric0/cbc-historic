@@ -84,8 +84,6 @@ h6 {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  max-width: var(--desktop-max-w);
-  margin: 0 auto;
   font-family: 'Poppins', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   color: #454545;
   background: transparent;
