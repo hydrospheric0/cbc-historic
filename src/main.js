@@ -390,12 +390,13 @@ const mainTemplate = `
         <div class="layout-cell layout-bottom-right">
           <div class="plot-pane card">
             <div class="plot-bar">
-              <div class="plot-overlay-controls">
+              <div class="plot-overlay-left">
                 <select id="plotSpeciesSelect" class="panel-select" data-action="plot-species-select"></select>
+              </div>
+              <div class="plot-overlay-right">
                 <button id="plotExportOverlayBtn" class="popout-button" type="button" aria-label="Export CSV" title="Export CSV">⤓</button>
                 <button id="plotPopoutOverlayBtn" class="popout-button" type="button" aria-label="Pop out plot" title="Pop out">⤢</button>
               </div>
-              <div class="plot-bar-spacer"></div>
             </div>
             <div id="plot" class="plot">
               <div class="empty">Click on a species above to plot</div>
@@ -407,7 +408,7 @@ const mainTemplate = `
     </div>
 
     <footer class="footerbar">
-      <a class="footerLink" href="https://buymeacoffee.com/bartg" target="_blank" rel="noreferrer">
+      <a class="footerLink" href="https://buymeacoffee.com/bartg" target="_blank" rel="noopener noreferrer">
         <img
           class="bmcButton"
           src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
@@ -440,11 +441,11 @@ const mainTemplate = `
             Click a circle on the map (or search by name/code) to load data. The app downloads that circle’s data, stores it locally in your browser, and fills the tables and plot. Use the ↻ Update button in Available data to refresh a circle.
           </p>
           <p style="margin-top: 12px; font-weight: 800;">
-            <a href="https://github.com/hydrospheric0/cbc-historic/" target="_blank" rel="noreferrer">View the source code on GitHub</a>
+            <a href="https://github.com/hydrospheric0/cbc-historic/" target="_blank" rel="noopener noreferrer">View the source code on GitHub</a>
           </p>
           <p style="margin-top: 12px; font-weight: 700;">If you find this tool useful, please consider supporting its development:</p>
           <div class="sponsorBlock">
-            <a class="sponsorButton" href="https://buymeacoffee.com/bartg" target="_blank" rel="noreferrer">
+            <a class="sponsorButton" href="https://buymeacoffee.com/bartg" target="_blank" rel="noopener noreferrer">
               <img
                 class="bmcButton"
                 src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
@@ -476,10 +477,9 @@ const plotPopoutTemplate = `
     <div class="content-row">
       <div class="plot-pane card" style="width: 100%; height: 100%;">
         <div class="plot-bar">
-          <div class="plot-overlay-controls">
+          <div class="plot-overlay-right">
             <select id="plotSpeciesSelect" class="panel-select" data-action="plot-species-select"></select>
           </div>
-          <div class="plot-bar-spacer"></div>
         </div>
         <div id="plot" class="plot">
           <div class="empty">Click on a species above to plot</div>

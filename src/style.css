@@ -51,6 +51,12 @@ body.resizing {
 
   --table-header-bg: #f7f7f7;
   --table-header-fg: #0c1b50;
+  --ui-scale: clamp(0.9, 0.45vw + 0.78, 1.12);
+  --topbar-h: clamp(4.9rem, 8.8vh, 6.7rem);
+  --footer-h: clamp(4.1rem, 8vh, 5.8rem);
+  --topbar-pad-x: clamp(0.7rem, 1.45vw, 0.95rem);
+  --layout-gutter: clamp(0.45rem, 0.9vw, 0.75rem);
+  --panel-pad: clamp(0.42rem, 0.85vh, 0.62rem) clamp(0.52rem, 1.1vw, 0.82rem);
 }
 
 h1,
@@ -83,14 +89,15 @@ h6 {
 .topbar {
   width: 100%;
   box-sizing: border-box;
-  height: 150px;
-  padding: 0 18px;
+  height: var(--topbar-h);
+  min-height: var(--topbar-h);
+  padding: 0 var(--topbar-pad-x);
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   font-weight: 800;
-  font-size: 32px;
+  font-size: clamp(1.2rem, 1.9vw, 1.65rem);
   line-height: 1.15;
   background: var(--header-bg);
   color: #f9fafb;
@@ -98,20 +105,20 @@ h6 {
 }
 
 .topbarTitle {
-  padding-right: 10px;
+  padding-right: clamp(0.45rem, 0.9vw, 0.65rem);
 }
 
 .infoButton {
-  width: 34px;
-  height: 34px;
+  width: clamp(1.6rem, 2.8vh, 1.9rem);
+  height: clamp(1.6rem, 2.8vh, 1.9rem);
   border-radius: 999px;
   border: 3px solid rgba(255, 255, 255, 0.95);
   background: var(--accent-teal);
   color: #f9fafb;
   cursor: pointer;
   font-weight: 900;
-  font-size: 16px;
-  line-height: 34px;
+  font-size: clamp(0.72rem, 1.2vh, 0.9rem);
+  line-height: clamp(1.45rem, 2.6vh, 1.8rem);
   text-align: center;
   flex: 0 0 auto;
 }
@@ -125,7 +132,7 @@ h6 {
   min-height: 0;
   display: flex;
   gap: 0;
-  padding: 14px;
+  padding: clamp(0.6rem, 1.3vh, 0.9rem);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -137,8 +144,8 @@ h6 {
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: var(--left-w, 360px) var(--layout-gutter, 12px) 1fr;
-  grid-template-rows: var(--top-h, 520px) var(--layout-gutter, 12px) 1fr;
+  grid-template-columns: var(--left-w, clamp(17rem, 25vw, 22.5rem)) var(--layout-gutter, var(--layout-gutter)) 1fr;
+  grid-template-rows: var(--top-h, clamp(22rem, 50vh, 32.5rem)) var(--layout-gutter, var(--layout-gutter)) 1fr;
   overflow: hidden;
 }
 
@@ -176,7 +183,7 @@ h6 {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: clamp(0.5rem, 1vw, 0.75rem);
 }
 
 .layout-stack .count-header {
@@ -194,12 +201,12 @@ h6 {
 }
 
 .layout-bottom-left .resources-card .cardBody {
-  max-height: 120px;
+  max-height: clamp(5.5rem, 15vh, 7.5rem);
   overflow: auto;
 }
 
 .layout-bottom-left .map-card {
-  min-height: 160px;
+  min-height: clamp(7rem, 18vh, 10rem);
 }
 
 .layout-right-top {
@@ -212,7 +219,7 @@ h6 {
 .layout-gutter-x {
   grid-column: 2;
   grid-row: 1 / 4;
-  width: var(--layout-gutter, 8px);
+  width: var(--layout-gutter, clamp(0.35rem, 0.75vw, 0.5rem));
   height: 100%;
   margin: 0;
   cursor: col-resize;
@@ -225,7 +232,7 @@ h6 {
 .layout-gutter-y {
   grid-column: 3;
   grid-row: 2;
-  height: var(--layout-gutter, 8px);
+  height: var(--layout-gutter, clamp(0.35rem, 0.75vw, 0.5rem));
   width: 100%;
   margin: 0;
   cursor: row-resize;
@@ -262,7 +269,7 @@ h6 {
 
 .card {
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 10px;
+  border-radius: clamp(0.45rem, 0.9vw, 0.65rem);
   background: #fff;
   overflow: hidden;
 }
@@ -274,21 +281,21 @@ h6 {
 }
 
 .cardHeader {
-  padding: 10px 12px;
+  padding: var(--panel-pad);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   font-weight: 600;
 }
 
 .cardBody {
-  padding: 10px 12px;
+  padding: var(--panel-pad);
 }
 
 .sidebar {
-  min-width: 280px;
+  min-width: clamp(13rem, 20vw, 17.5rem);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: clamp(0.6rem, 1.3vh, 0.9rem);
   min-height: 0;
   flex: 0 0 auto;
 }
@@ -306,30 +313,30 @@ h6 {
 }
 
 .nav-card .map-card {
-  height: 320px;
-  min-height: 320px;
-  margin: 10px 0;
+  height: clamp(14rem, 35vh, 20rem);
+  min-height: clamp(14rem, 35vh, 20rem);
+  margin: clamp(0.45rem, 1vh, 0.65rem) 0;
 }
 
 .nav-card .map-body {
-  padding: 12px 0;
+  padding: clamp(0.55rem, 1.1vh, 0.75rem) 0;
 }
 
 .nav-section-header {
-  padding: 10px 12px;
-  margin: 10px 0 0 0;
-  border-radius: 10px;
+  padding: var(--panel-pad);
+  margin: clamp(0.45rem, 1vh, 0.65rem) 0 0 0;
+  border-radius: clamp(0.45rem, 0.9vw, 0.65rem);
   background: var(--accent-purple);
   color: #fff;
   font-weight: 900;
   letter-spacing: 0.3px;
-  font-size: 13px;
+  font-size: clamp(0.68rem, 0.8vw, 0.84rem);
 }
 
 .map-body {
   flex: 1;
   min-height: 0;
-  padding: 16px;
+  padding: clamp(0.75rem, 1.6vh, 1rem);
   display: flex;
   flex-direction: column;
 }
@@ -342,7 +349,7 @@ h6 {
 }
 
 .resources-body {
-  padding: 10px 12px;
+  padding: var(--panel-pad);
 }
 
 .resources-links {
@@ -359,7 +366,7 @@ h6 {
 .count-search-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 9px 10px;
+  padding: clamp(0.42rem, 0.95vh, 0.56rem) clamp(0.5rem, 1.1vw, 0.65rem);
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.18);
   font-size: 12px;
@@ -377,7 +384,7 @@ h6 {
   border: 1px solid rgba(0, 0, 0, 0.12);
   background: #fff;
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: clamp(0.38rem, 0.9vh, 0.52rem) clamp(0.5rem, 1.1vw, 0.65rem);
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
@@ -394,8 +401,8 @@ h6 {
 }
 
 .count-search-selected {
-  margin-top: 10px;
-  padding: 10px 10px;
+  margin-top: clamp(0.45rem, 1vh, 0.65rem);
+  padding: clamp(0.45rem, 1vh, 0.65rem);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 10px;
   background: #fff;
@@ -412,7 +419,7 @@ h6 {
 
 .count-selected-row {
   display: grid;
-  grid-template-columns: 44px 1fr;
+  grid-template-columns: clamp(2rem, 3.2vw, 2.75rem) 1fr;
   gap: 8px;
   padding: 3px 0;
 }
@@ -428,7 +435,7 @@ h6 {
 
 .button-link {
   display: inline-block;
-  padding: 7px 10px;
+  padding: clamp(0.34rem, 0.85vh, 0.5rem) clamp(0.5rem, 1.1vw, 0.65rem);
   border: 1px solid rgba(0, 0, 0, 0.18);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.95);
@@ -443,13 +450,13 @@ h6 {
 }
 
 .delete-button {
-  width: 26px;
+  width: clamp(1.15rem, 2.3vh, 1.65rem);
   padding: 0;
   border-radius: 999px;
   color: #b91c1c;
   border-color: rgba(185, 28, 28, 0.45);
-  font-size: 18px;
-  line-height: 24px;
+  font-size: clamp(0.8rem, 1.55vh, 1.1rem);
+  line-height: clamp(1rem, 2vh, 1.5rem);
   font-weight: 900;
 }
 
@@ -466,18 +473,18 @@ h6 {
 }
 
 .count-header {
-  margin-bottom: 12px;
+  margin-bottom: clamp(0.5rem, 1vw, 0.75rem);
 }
 
 .count-header-bar {
-  padding: 10px 12px;
+  padding: var(--panel-pad);
   background: var(--selection-header-bg);
   color: #fff;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  min-height: 44px;
+  gap: clamp(0.5rem, 1vw, 0.75rem);
+  min-height: clamp(1.75rem, 3.7vh, 2.35rem);
 }
 
 .nav-header .count-header-bar {
@@ -485,7 +492,7 @@ h6 {
 }
 
 .count-header-text {
-  font-size: 18px;
+  font-size: clamp(0.78rem, 1.05vw, 0.95rem);
   font-weight: 800;
   line-height: 1.2;
   color: #fff;
@@ -498,7 +505,7 @@ h6 {
 
 .tabs {
   display: flex;
-  gap: 8px;
+  gap: clamp(0.35rem, 0.8vw, 0.5rem);
   justify-content: flex-end;
   align-items: center;
   flex-wrap: nowrap;
@@ -508,7 +515,7 @@ h6 {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 12px;
+  gap: clamp(0.5rem, 1vw, 0.75rem);
   flex-wrap: nowrap;
 }
 
@@ -528,10 +535,10 @@ h6 {
 .download-indicator {
   flex: 0 0 auto;
   order: 3;
-  font-size: 12px;
+  font-size: clamp(0.64rem, 0.72vw, 0.78rem);
   font-weight: 800;
   line-height: 1;
-  padding: 6px 8px;
+  padding: clamp(0.28rem, 0.7vh, 0.4rem) clamp(0.38rem, 0.9vw, 0.52rem);
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.55);
   color: rgba(255, 255, 255, 0.95);
@@ -540,7 +547,7 @@ h6 {
 }
 
 .tab-button {
-  padding: 7px 10px;
+  padding: clamp(0.34rem, 0.85vh, 0.5rem) clamp(0.5rem, 1.1vw, 0.65rem);
   border: 1px solid rgba(0, 0, 0, 0.12);
   background: rgba(255, 255, 255, 0.95);
   cursor: pointer;
@@ -559,7 +566,7 @@ h6 {
 }
 
 .section-title {
-  font-size: 12px;
+  font-size: clamp(0.64rem, 0.72vw, 0.78rem);
   font-weight: 700;
   color: #444;
   margin: 14px 0 8px 0;
@@ -577,7 +584,7 @@ h6 {
 .dropzone {
   border: 2px dashed #bbb;
   border-radius: 8px;
-  padding: 14px;
+  padding: clamp(0.6rem, 1.3vh, 0.9rem);
   cursor: pointer;
   background: #fafafa;
 }
@@ -615,7 +622,7 @@ h6 {
 
 .summary-row {
   display: grid;
-  grid-template-columns: 130px 1fr;
+  grid-template-columns: clamp(5.5rem, 10vw, 8.2rem) 1fr;
   gap: 8px;
   padding: 4px 0;
 }
@@ -650,15 +657,15 @@ h6 {
 }
 
 .update-button {
-  width: 26px;
-  height: 26px;
+  width: clamp(1.15rem, 2.3vh, 1.65rem);
+  height: clamp(1.15rem, 2.3vh, 1.65rem);
   border-radius: 999px;
   border: 1px solid rgba(0, 0, 0, 0.18);
   background: rgba(255, 255, 255, 0.95);
   color: var(--accent-teal);
   cursor: pointer;
   font-weight: 900;
-  line-height: 24px;
+  line-height: clamp(1rem, 2vh, 1.5rem);
   text-align: center;
   padding: 0;
 }
@@ -707,7 +714,7 @@ h6 {
 }
 
 .plot-circle-hint {
-  padding: 10px 12px;
+  padding: var(--panel-pad);
   font-size: 12px;
   color: #555;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
@@ -718,15 +725,15 @@ h6 {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: clamp(0.45rem, 0.9vw, 0.65rem);
+  padding: var(--panel-pad);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   min-width: 0;
 }
 
 .panel-title {
   font-weight: 700;
-  font-size: 13px;
+  font-size: clamp(0.68rem, 0.8vw, 0.84rem);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -735,22 +742,22 @@ h6 {
 
 .panel-sub {
   font-weight: 600;
-  font-size: 12px;
+  font-size: clamp(0.64rem, 0.72vw, 0.78rem);
   color: #666;
-  margin-left: 8px;
+  margin-left: clamp(0.35rem, 0.8vw, 0.5rem);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .export-button {
-  padding: 7px 10px;
+  padding: clamp(0.34rem, 0.85vh, 0.5rem) clamp(0.5rem, 1.1vw, 0.65rem);
   border: 1px solid rgba(0, 0, 0, 0.18);
   background: #fff;
   cursor: pointer;
   border-radius: 8px;
   font-weight: 700;
-  font-size: 12px;
+  font-size: clamp(0.64rem, 0.72vw, 0.78rem);
 }
 
 .export-button:hover {
@@ -762,7 +769,7 @@ h6 {
   min-height: 0;
   width: 100%;
   box-sizing: border-box;
-  padding: 16px;
+  padding: clamp(0.75rem, 1.6vh, 1rem);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -775,20 +782,20 @@ body:not(.is-popout-plot) .plot-pane > .panel-header {
 .plot-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: clamp(0.35rem, 0.8vw, 0.5rem);
+  padding: clamp(0.38rem, 0.9vh, 0.55rem) clamp(0.65rem, 1.35vw, 0.95rem);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   background: rgba(255, 255, 255, 0.9);
 }
 
-.plot-bar-spacer {
-  flex: 1 1 auto;
-}
-
-.plot-overlay-controls {
+.plot-overlay-left,
+.plot-overlay-right {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.plot-overlay-right {
   margin-left: auto;
 }
 
@@ -800,9 +807,6 @@ body.is-popout-plot #plotPopoutOverlayBtn {
   display: none;
 }
 
-body.is-popout-plot .plot-bar-spacer {
-  display: none;
-}
 
 .table tr.is-selected td {
   background: #fff3a0;
@@ -816,31 +820,31 @@ body.is-popout-plot .plot-bar-spacer {
 .panel-actions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: clamp(0.35rem, 0.8vw, 0.5rem);
   flex: 0 0 auto;
 }
 
 .panel-select {
-  height: 30px;
+  height: clamp(1.45rem, 2.8vh, 1.9rem);
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.18);
-  padding: 4px 8px;
-  font-size: 12px;
+  padding: clamp(0.16rem, 0.5vh, 0.25rem) clamp(0.35rem, 0.8vw, 0.5rem);
+  font-size: clamp(0.64rem, 0.72vw, 0.78rem);
   background: rgba(255, 255, 255, 0.95);
-  max-width: 260px;
-  min-width: 180px;
+  max-width: clamp(12rem, 20vw, 16.25rem);
+  min-width: clamp(8rem, 14vw, 11.25rem);
   box-sizing: border-box;
 }
 
 .popout-button {
-  width: 30px;
-  height: 30px;
+  width: clamp(1.45rem, 2.8vh, 1.9rem);
+  height: clamp(1.45rem, 2.8vh, 1.9rem);
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.18);
   background: rgba(255, 255, 255, 0.95);
   cursor: pointer;
   font-weight: 900;
-  line-height: 28px;
+  line-height: clamp(1.25rem, 2.45vh, 1.75rem);
   text-align: center;
   padding: 0;
   color: var(--accent-teal);
@@ -856,7 +860,7 @@ body.is-popout-plot .plot-bar-spacer {
   height: 100%;
   width: 100%;
   box-sizing: border-box;
-  padding: 16px;
+  padding: clamp(0.75rem, 1.6vh, 1rem);
   position: relative;
 }
 
@@ -877,8 +881,8 @@ body:not(.is-popout) .plot > .empty::after,
 body:not(.is-popout) .plot [data-role="plot-empty"]::after {
   content: '↑';
   display: block;
-  margin-top: 8px;
-  font-size: 18px;
+  margin-top: clamp(0.35rem, 0.8vh, 0.5rem);
+  font-size: clamp(0.8rem, 1.55vh, 1.1rem);
   line-height: 1;
   color: #b91c1c;
   animation: cbc-arrow-bounce 0.9s ease-in-out infinite;
@@ -919,7 +923,7 @@ body:not(.is-popout) .plot [data-role="plot-empty"]::after {
   min-height: 0;
   overflow: auto;
   max-width: 100%;
-  padding-bottom: 10px;
+  padding-bottom: clamp(0.45rem, 1vh, 0.65rem);
   scrollbar-gutter: stable;
 }
 
@@ -927,7 +931,7 @@ body:not(.is-popout) .plot [data-role="plot-empty"]::after {
   border-collapse: collapse;
   width: auto;
   min-width: 0;
-  font-size: 12px;
+  font-size: clamp(0.64rem, 0.72vw, 0.78rem);
   table-layout: auto;
   display: inline-table;
 }
@@ -935,7 +939,7 @@ body:not(.is-popout) .plot [data-role="plot-empty"]::after {
 .table th,
 .table td {
   border: 1px solid #ddd;
-  padding: 6px 8px;
+  padding: clamp(0.26rem, 0.65vh, 0.4rem) clamp(0.35rem, 0.8vw, 0.5rem);
   vertical-align: top;
 }
 
@@ -972,16 +976,17 @@ body:not(.is-popout) .plot [data-role="plot-empty"]::after {
 }
 
 .empty {
-  font-size: 12px;
+  font-size: clamp(0.64rem, 0.72vw, 0.78rem);
   color: #555;
-  padding: 12px;
+  padding: clamp(0.55rem, 1.1vh, 0.75rem);
 }
 
 .footerbar {
   width: 100%;
   box-sizing: border-box;
-  height: 100px;
-  padding: 0 18px;
+  height: var(--footer-h);
+  min-height: var(--footer-h);
+  padding: 0 var(--topbar-pad-x);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1001,7 +1006,7 @@ body:not(.is-popout) .plot [data-role="plot-empty"]::after {
 }
 
 .bmcButton {
-  height: 44px;
+  height: clamp(2rem, 4.2vh, 2.75rem);
   width: auto;
   display: block;
 }
@@ -1014,10 +1019,10 @@ body:not(.is-popout) .plot [data-role="plot-empty"]::after {
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
-  padding-top: calc(150px + 12px);
-  padding-right: 10px;
-  padding-left: 10px;
-  padding-bottom: 18px;
+  padding-top: calc(var(--topbar-h) + clamp(0.5rem, 1vh, 0.75rem));
+  padding-right: clamp(0.5rem, 1vw, 0.7rem);
+  padding-left: clamp(0.5rem, 1vw, 0.7rem);
+  padding-bottom: clamp(0.8rem, 1.8vh, 1.15rem);
   box-sizing: border-box;
   overflow: auto;
 }
@@ -1033,14 +1038,14 @@ body:not(.is-popout) .plot [data-role="plot-empty"]::after {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - (150px + 12px) - 18px);
+  max-height: calc(100vh - (var(--topbar-h) + clamp(0.5rem, 1vh, 0.75rem)) - clamp(0.8rem, 1.8vh, 1.15rem));
 }
 
 .modalHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  padding: var(--panel-pad);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   background: var(--accent-teal);
   color: #fff;
@@ -1065,8 +1070,8 @@ body:not(.is-popout) .plot [data-role="plot-empty"]::after {
 }
 
 .modalBody {
-  padding: 12px 14px 16px;
-  font-size: 14px;
+  padding: clamp(0.55rem, 1.1vh, 0.75rem) clamp(0.65rem, 1.35vw, 0.95rem) clamp(0.75rem, 1.5vh, 1rem);
+  font-size: clamp(0.74rem, 0.88vw, 0.9rem);
   line-height: 1.45;
   overflow: auto;
 }
@@ -1076,7 +1081,7 @@ body:not(.is-popout) .plot [data-role="plot-empty"]::after {
 }
 
 .modalBody ul {
-  margin: 8px 0 0 18px;
+  margin: clamp(0.3rem, 0.8vh, 0.45rem) 0 0 clamp(0.7rem, 1.4vw, 1rem);
   padding: 0;
 }
 
