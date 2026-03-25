@@ -409,13 +409,6 @@ const mainTemplate = `
 
     <footer class="footerbar">
       <span class="footerCopyright">(C) Bart Wickel, 2026</span>
-      <a class="footerLink" href="https://buymeacoffee.com/bartg" target="_blank" rel="noopener noreferrer">
-        <img
-          class="bmcButton"
-          src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
-          alt="Buy Me a Coffee"
-        />
-      </a>
     </footer>
 
     <div id="infoModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="infoModalTitle">
@@ -444,16 +437,7 @@ const mainTemplate = `
           <p style="margin-top: 12px; font-weight: 800;">
             <a href="https://github.com/hydrospheric0/cbc-historic/" target="_blank" rel="noopener noreferrer">View the source code on GitHub</a>
           </p>
-          <p style="margin-top: 12px; font-weight: 700;">If you find this tool useful, please consider supporting its development:</p>
-          <div class="sponsorBlock">
-            <a class="sponsorButton" href="https://buymeacoffee.com/bartg" target="_blank" rel="noopener noreferrer">
-              <img
-                class="bmcButton"
-                src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
-                alt="Buy Me a Coffee"
-              />
-            </a>
-          </div>
+
         </div>
       </div>
     </div>
